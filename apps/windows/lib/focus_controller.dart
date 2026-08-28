@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 
 import 'models.dart';
 import 'notification_adapter.dart';
-import 'prompt_planner.dart';
 import 'repositories.dart';
 
 class FocusController extends ChangeNotifier {
@@ -34,7 +33,11 @@ class FocusController extends ChangeNotifier {
   int _restElapsed = 0;
   int _microBreakRemaining = 0;
   int _nextPromptIndex = 0;
-  bool _sessionSaved = false;
+  Future<void>? _sessionSaveFuture;
+  String? _activePromptId;
+  int? _activePromptStartedElapsed;
+  MeasurementContext _measurementContext = const MeasurementContext();
+  SessionOutcomeReport? _outcomeReport;
   List<PromptCue> _promptPlan = const [];
   final List<PromptEvent> _events = [];
 
@@ -45,6 +48,9 @@ class FocusController extends ChangeNotifier {
   int get microBreakRemaining => _microBreakRemaining;
   List<PromptCue> get promptPlan => List.unmodifiable(_promptPlan);
   List<PromptEvent> get events => List.unmodifiable(_events);
+  SessionOutcomeReport? get outcomeReport => _outcomeReport;
+  StudySessionAssignment? get activeStudyAssignment =>
+      _measurementContext.studyAssignment;
 
   bool get isActive =>
       _phase == SessionPhase.focusing ||
@@ -97,7 +103,7 @@ class FocusController extends ChangeNotifier {
       case SessionPhase.paused:
         return '已暂停';
       case SessionPhase.microBreak:
-        return '微休息';
+        return '目标检查';
       case SessionPhase.resting:
         return '休息中';
       case SessionPhase.completed:
@@ -129,18 +135,57 @@ class FocusController extends ChangeNotifier {
     }
     final sessions = await _repository.loadSessions();
     final now = DateTime.now();
+    StudySessionAssignment? studyAssignment;
+    var planningSettings = _settings;
+    final enrollment = _settings.studyEnrollment;
+    if (enrollment != null && enrollment.isActive) {
+      studyAssignment = assignmentForNextStudySession(
+        enrollment,
+        assignedAt: now,
+      );
+      final advancedSettings = _settings
+          .copyWith(studyEnrollment: enrollment.advance())
+          .normalized();
+      await _repository.saveSettings(advancedSettings);
+      _settings = advancedSettings;
+      if (studyAssignment.condition == StudyCondition.noChecks) {
+        planningSettings = _settings.copyWith(goalChecksEnabled: false);
+      }
+    }
     _activeSessionId = _sessionId(now);
     _startedAt = now;
     _focusElapsed = 0;
     _restElapsed = 0;
     _microBreakRemaining = 0;
     _nextPromptIndex = 0;
-    _sessionSaved = false;
+    _sessionSaveFuture = null;
+    _outcomeReport = null;
     _events.clear();
+    final cadenceDecision = _settings.adaptiveCadence
+        ? cadenceDecisionFromHistory(sessions)
+        : const CadenceDecision(factor: 1, reason: 'adaptive_cadence_disabled');
     _promptPlan = _planner.planSession(
-      _settings,
+      planningSettings,
       sessions,
       seed: now.millisecondsSinceEpoch,
+    );
+    _measurementContext = MeasurementContext(
+      platform: AppPlatform.windows,
+      appVersion: '0.2.0+2',
+      timezoneOffsetMinutes: now.timeZoneOffset.inMinutes,
+      plannedPromptOffsets: _promptPlan
+          .map((cue) => cue.offsetSeconds)
+          .toList(growable: false),
+      adaptiveCadence: _settings.adaptiveCadence,
+      cadenceFactor: cadenceDecision.factor,
+      cadenceReason: cadenceDecision.reason,
+      notificationsEnabled: _settings.notificationsEnabled,
+      foregroundSoundEnabled: _settings.foregroundPromptSoundEnabled,
+      goalChecksEnabled: planningSettings.goalChecksEnabled,
+      minPromptIntervalSeconds: planningSettings.minPromptIntervalSeconds,
+      maxPromptIntervalSeconds: planningSettings.maxPromptIntervalSeconds,
+      responseWindowSeconds: planningSettings.microBreakSeconds,
+      studyAssignment: studyAssignment,
     );
     _phase = SessionPhase.focusing;
     _lastTick = now;
@@ -174,28 +219,63 @@ class FocusController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void acknowledgePrompt() {
-    if (_phase != SessionPhase.microBreak) return;
-    _events.add(
-      PromptEvent(
-        elapsedSeconds: _focusElapsed,
-        occurredAt: DateTime.now(),
-        type: PromptResponseType.acknowledged,
-      ),
-    );
-    _microBreakRemaining = 1;
-    notifyListeners();
+  void recordOnTask() {
+    _finishPrompt(PromptResponseType.onTask);
+  }
+
+  void recordOffTask() {
+    _finishPrompt(PromptResponseType.offTask);
   }
 
   void skipPrompt() {
+    _finishPrompt(PromptResponseType.skipped);
+  }
+
+  Future<void> recordMeaningfulProgress(
+    MeaningfulProgressResponse response,
+  ) async {
+    if (_phase != SessionPhase.completed) return;
+    await _finalizeSession(completed: true);
+    final id = _activeSessionId;
+    if (id == null) return;
+    _outcomeReport = SessionOutcomeReport(
+      meaningfulProgress: response,
+      interruptionBurden: _outcomeReport?.interruptionBurden,
+      answeredAt: DateTime.now(),
+    );
+    await _repository.updateSessionOutcome(id, _outcomeReport!);
+    notifyListeners();
+  }
+
+  Future<void> recordInterruptionBurden(int rating) async {
+    if (_phase != SessionPhase.completed) return;
+    await _finalizeSession(completed: true);
+    final id = _activeSessionId;
+    if (id == null) return;
+    _outcomeReport = SessionOutcomeReport(
+      meaningfulProgress: _outcomeReport?.meaningfulProgress,
+      interruptionBurden: rating,
+      answeredAt: DateTime.now(),
+    ).normalized();
+    await _repository.updateSessionOutcome(id, _outcomeReport!);
+    notifyListeners();
+  }
+
+  void _finishPrompt(PromptResponseType response) {
     if (_phase != SessionPhase.microBreak) return;
     _events.add(
       PromptEvent(
         elapsedSeconds: _focusElapsed,
         occurredAt: DateTime.now(),
-        type: PromptResponseType.skipped,
+        type: response,
+        promptId: _activePromptId ?? '',
+        responseLatencySeconds: _activePromptStartedElapsed == null
+            ? null
+            : _focusElapsed - _activePromptStartedElapsed!,
       ),
     );
+    _activePromptId = null;
+    _activePromptStartedElapsed = null;
     _microBreakRemaining = 0;
     _phase = SessionPhase.focusing;
     notifyListeners();
@@ -208,8 +288,14 @@ class FocusController extends ChangeNotifier {
         elapsedSeconds: _focusElapsed,
         occurredAt: DateTime.now(),
         type: PromptResponseType.delayed,
+        promptId: _activePromptId ?? '',
+        responseLatencySeconds: _activePromptStartedElapsed == null
+            ? null
+            : _focusElapsed - _activePromptStartedElapsed!,
       ),
     );
+    _activePromptId = null;
+    _activePromptStartedElapsed = null;
     _microBreakRemaining = 0;
     _phase = SessionPhase.focusing;
     _promptPlan = [
@@ -251,15 +337,26 @@ class FocusController extends ChangeNotifier {
         }
         break;
       case SessionPhase.microBreak:
+        _focusElapsed += 1;
         _microBreakRemaining -= 1;
+        if (_focusElapsed >= _settings.focusDurationSeconds) {
+          _completeFocus();
+          break;
+        }
         if (_microBreakRemaining <= 0) {
           _events.add(
             PromptEvent(
               elapsedSeconds: _focusElapsed,
               occurredAt: DateTime.now(),
               type: PromptResponseType.ended,
+              promptId: _activePromptId ?? '',
+              responseLatencySeconds: _activePromptStartedElapsed == null
+                  ? null
+                  : _focusElapsed - _activePromptStartedElapsed!,
             ),
           );
+          _activePromptId = null;
+          _activePromptStartedElapsed = null;
           _phase = SessionPhase.focusing;
         }
         break;
@@ -278,27 +375,38 @@ class FocusController extends ChangeNotifier {
     }
   }
 
+  @visibleForTesting
+  void advanceForTesting(int seconds) {
+    assert(seconds >= 0);
+    _ticker?.cancel();
+    for (var i = 0; i < seconds; i += 1) {
+      _advanceOneSecond();
+    }
+    _ticker?.cancel();
+    notifyListeners();
+  }
+
   void _maybeStartMicroBreak() {
     if (_nextPromptIndex >= _promptPlan.length) return;
     final nextCue = _promptPlan[_nextPromptIndex];
     if (_focusElapsed < nextCue.offsetSeconds) return;
 
+    final promptId = '${_activeSessionId ?? 'session'}:$_nextPromptIndex';
     _nextPromptIndex += 1;
     _microBreakRemaining = _settings.microBreakSeconds;
     _phase = SessionPhase.microBreak;
+    _activePromptId = promptId;
+    _activePromptStartedElapsed = _focusElapsed;
     _events.add(
       PromptEvent(
         elapsedSeconds: _focusElapsed,
         occurredAt: DateTime.now(),
         type: PromptResponseType.shown,
+        promptId: promptId,
+        plannedOffsetSeconds: nextCue.offsetSeconds,
       ),
     );
-    unawaited(
-      _notificationAdapter.showPrompt(
-        settings: _settings,
-        remainingMicroBreakSeconds: _settings.microBreakSeconds,
-      ),
-    );
+    unawaited(_notificationAdapter.showPrompt(settings: _settings));
   }
 
   void _completeFocus() {
@@ -311,12 +419,12 @@ class FocusController extends ChangeNotifier {
   }
 
   Future<void> _finalizeSession({required bool completed}) async {
-    if (_sessionSaved) return;
+    final existingSave = _sessionSaveFuture;
+    if (existingSave != null) return existingSave;
     final id = _activeSessionId;
     final startedAt = _startedAt;
     if (id == null || startedAt == null || _focusElapsed <= 0) return;
-    _sessionSaved = true;
-    await _repository.appendSession(
+    final save = _repository.appendSession(
       FocusSession(
         id: id,
         startedAt: startedAt,
@@ -331,8 +439,19 @@ class FocusController extends ChangeNotifier {
         completed: completed,
         modeName: _settings.modeName,
         promptEvents: List.unmodifiable(_events),
+        goal: _settings.sessionGoal,
+        ifThenPlan: _settings.ifThenPlan,
+        recallPrompt: _settings.recallPrompt,
+        measurementContext: _measurementContext,
       ),
     );
+    _sessionSaveFuture = save;
+    try {
+      await save;
+    } catch (_) {
+      _sessionSaveFuture = null;
+      rethrow;
+    }
   }
 
   void _reset() {
@@ -344,7 +463,11 @@ class FocusController extends ChangeNotifier {
     _restElapsed = 0;
     _microBreakRemaining = 0;
     _nextPromptIndex = 0;
-    _sessionSaved = false;
+    _sessionSaveFuture = null;
+    _outcomeReport = null;
+    _activePromptId = null;
+    _activePromptStartedElapsed = null;
+    _measurementContext = const MeasurementContext();
     _promptPlan = const [];
     _events.clear();
   }

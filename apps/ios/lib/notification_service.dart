@@ -39,7 +39,7 @@ class NotificationService {
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >()
-        ?.requestPermissions(alert: true, badge: false, sound: true);
+        ?.requestPermissions(alert: true, badge: false, sound: false);
   }
 
   Future<void> cancelScheduled() async {
@@ -70,8 +70,10 @@ class NotificationService {
       _scheduledIds.add(id);
       await _plugin.zonedSchedule(
         id: id,
-        title: '微休息提示',
-        body: '停 10 秒，放松视线，然后回到当前小目标。',
+        title: '目标检查',
+        body: settings.sessionGoal.isEmpty
+            ? '还在做刚才决定的事吗？可忽略；未响应不会被视为失败。'
+            : '当前目标：${settings.sessionGoal}',
         scheduledDate: tz.TZDateTime.from(
           now.add(Duration(seconds: secondsFromNow)),
           tz.local,
@@ -81,12 +83,12 @@ class NotificationService {
             'focus_timers',
             'Focus timers',
             channelDescription: 'Random cue focus timer reminders',
-            importance: Importance.high,
-            priority: Priority.high,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
-            presentSound: true,
+            presentSound: false,
             threadIdentifier: 'random-cue-focus',
           ),
         ),
@@ -101,7 +103,7 @@ class NotificationService {
       await _plugin.zonedSchedule(
         id: endId,
         title: '专注结束',
-        body: '这一轮完成了。进入休息，让大脑整理刚刚处理的信息。',
+        body: '这一轮计时已结束。你可以休息，或先记录下一步。',
         scheduledDate: tz.TZDateTime.from(
           now.add(Duration(seconds: remainingFocus)),
           tz.local,
@@ -111,12 +113,12 @@ class NotificationService {
             'focus_timers',
             'Focus timers',
             channelDescription: 'Random cue focus timer reminders',
-            importance: Importance.high,
-            priority: Priority.high,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
-            presentSound: true,
+            presentSound: false,
             threadIdentifier: 'random-cue-focus',
           ),
         ),
