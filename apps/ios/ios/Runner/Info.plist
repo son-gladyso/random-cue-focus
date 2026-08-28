@@ -50,7 +50,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSUserNotificationUsageDescription</key>
-	<string>用于在锁屏或后台时提醒你进行短暂微休息。</string>
+	<string>仅在你主动开启后，用于在锁屏或后台显示可忽略的目标检查。</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

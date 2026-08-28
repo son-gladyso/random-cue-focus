@@ -1,7 +1,7 @@
 name: random_cue_focus_windows
-description: A science-informed random cue focus timer for Windows desktop.
+description: A privacy-first, evidence-informed goal check timer for Windows.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  focus_core:
+    path: ../../packages/focus_core
 
 dev_dependencies:
   flutter_test:

@@ -19,10 +19,7 @@ class NotificationAdapter {
     _initialized = true;
   }
 
-  Future<void> showPrompt({
-    required FocusSettings settings,
-    required int remainingMicroBreakSeconds,
-  }) async {
+  Future<void> showPrompt({required FocusSettings settings}) async {
     await initialize();
     if (settings.foregroundPromptSoundEnabled) {
       await SystemSound.play(SystemSoundType.alert);
@@ -31,8 +28,10 @@ class NotificationAdapter {
     if (!settings.desktopNotifications) return;
     try {
       await _channel.invokeMethod<void>('notify', {
-        'title': '微休息提示',
-        'body': '停 $remainingMicroBreakSeconds 秒，放松视线，然后回到当前小目标。',
+        'title': '目标检查',
+        'body': settings.sessionGoal.isEmpty
+            ? '还在做刚才决定的事吗？可忽略；应用不会把未响应当作失败。'
+            : '当前目标：${settings.sessionGoal}',
       });
     } catch (error) {
       debugPrint('Native notification failed: $error');
@@ -44,7 +43,7 @@ class NotificationAdapter {
     try {
       await _channel.invokeMethod<void>('notify', {
         'title': '专注结束',
-        'body': '这一轮完成了。进入休息，让大脑整理刚刚处理的信息。',
+        'body': '这一轮计时已结束。你可以按自己的计划休息，或先记录下一步。',
       });
     } catch (error) {
       debugPrint('Native notification failed: $error');

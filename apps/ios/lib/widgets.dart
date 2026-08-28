@@ -49,15 +49,20 @@ class CircleTimer extends StatelessWidget {
     required this.progress,
     required this.remainingSeconds,
     required this.phase,
+    this.maxSize = 420,
   });
 
   final double progress;
   final int remainingSeconds;
   final SessionPhase phase;
+  final double maxSize;
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context).width.clamp(280.0, 420.0);
+    final size = min(
+      MediaQuery.sizeOf(context).width.clamp(180.0, 420.0),
+      maxSize,
+    );
     return SizedBox(
       width: size.toDouble(),
       height: size.toDouble(),
@@ -70,9 +75,9 @@ class CircleTimer extends StatelessWidget {
               Text(
                 _formatSeconds(remainingSeconds),
                 maxLines: 1,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 76,
+                  fontSize: (size * 0.19).clamp(42.0, 76.0),
                   fontWeight: FontWeight.w800,
                   height: 0.95,
                   letterSpacing: 0,
@@ -81,7 +86,7 @@ class CircleTimer extends StatelessWidget {
               if (phase == SessionPhase.microBreak) ...[
                 const SizedBox(height: 14),
                 const Text(
-                  '看远处，放松呼吸',
+                  '回看目标，记录当下状态',
                   style: TextStyle(
                     color: appMuted,
                     fontSize: 17,
@@ -91,6 +96,69 @@ class CircleTimer extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class GoalCheckCard extends StatelessWidget {
+  const GoalCheckCard({
+    super.key,
+    required this.goal,
+    required this.onTask,
+    required this.offTask,
+    required this.onSkip,
+  });
+
+  final String goal;
+  final VoidCallback onTask;
+  final VoidCallback offTask;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: '目标检查',
+      child: GlassCard(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+        child: Column(
+          children: [
+            Text(
+              goal.isEmpty ? '还在做刚才决定的事吗？' : '当前目标：$goal',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              children: [
+                CupertinoButton(
+                  minimumSize: const Size(44, 44),
+                  onPressed: onTask,
+                  child: const Text('仍在目标'),
+                ),
+                CupertinoButton(
+                  minimumSize: const Size(44, 44),
+                  onPressed: offTask,
+                  child: const Text('刚刚走神'),
+                ),
+                CupertinoButton(
+                  minimumSize: const Size(44, 44),
+                  onPressed: onSkip,
+                  child: const Text('跳过'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -265,7 +333,7 @@ class ScienceNote extends StatelessWidget {
         SizedBox(width: 8),
         Expanded(
           child: Text(
-            '基于持续注意力衰减、微休息和自我调节研究设计。数据只用于本地个性化，不作为医学结论。',
+            '规划与自我监控有一定研究支持；短休息更稳定地改善疲劳感，不能保证认知表现。数据仅留在本地，不作医学结论。',
             style: TextStyle(
               color: appWarning,
               fontSize: 15,

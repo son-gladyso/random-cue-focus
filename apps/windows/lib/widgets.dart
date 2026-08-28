@@ -89,9 +89,9 @@ class CircleTimer extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     phase == SessionPhase.microBreak
-                        ? '看远处，放松呼吸'
+                        ? '回看目标，记录当下状态'
                         : phase == SessionPhase.resting
-                        ? '休息，让大脑整理'
+                        ? '按你的节奏休息'
                         : '保持当前小目标',
                     style: const TextStyle(
                       color: appMuted,
@@ -249,7 +249,7 @@ class ScienceNote extends StatelessWidget {
         SizedBox(width: 8),
         Expanded(
           child: Text(
-            '基于持续注意力衰减、微休息和自我调节研究设计。只做本地个性化，不作医学或保证性结论。',
+            '证据支持具体计划与自我监测；微休息更可能改善疲劳感，而非保证表现。线索默认稀疏、静默且可跳过。',
             style: TextStyle(
               color: appWarning,
               fontSize: 13,

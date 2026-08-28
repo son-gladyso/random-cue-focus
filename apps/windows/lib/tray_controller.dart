@@ -30,9 +30,7 @@ class AppTrayController {
     final isRunning =
         phase == SessionPhase.focusing || phase == SessionPhase.microBreak;
     try {
-      await _channel.invokeMethod<void>('setTrayState', {
-        'running': isRunning,
-      });
+      await _channel.invokeMethod<void>('setTrayState', {'running': isRunning});
     } catch (error) {
       debugPrint('Tray update failed: $error');
     }

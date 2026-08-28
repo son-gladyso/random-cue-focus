@@ -206,7 +206,7 @@ void AppFlutterWindow::InitializeTray() {
   nid.uID = kTrayIconId;
   nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
   nid.uCallbackMessage = kTrayMessage;
-  nid.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
+  nid.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
   wcscpy_s(nid.szTip, L"Random Cue Focus");
   Shell_NotifyIcon(NIM_ADD, &nid);
 }

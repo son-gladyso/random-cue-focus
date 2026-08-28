@@ -62,7 +62,12 @@ class _HourDistributionPainter extends CustomPainter {
       final valueHeight = chartHeight * (values[hour] / maxValue);
       if (valueHeight <= 0) continue;
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, top + chartHeight - valueHeight, barWidth, valueHeight),
+        Rect.fromLTWH(
+          x,
+          top + chartHeight - valueHeight,
+          barWidth,
+          valueHeight,
+        ),
         const Radius.circular(8),
       );
       canvas.drawRRect(rect, active);

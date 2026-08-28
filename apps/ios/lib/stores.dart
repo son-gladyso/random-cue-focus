@@ -2,13 +2,49 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 
-class SettingsStore {
-  SettingsStore({SharedPreferencesAsync? preferences})
+abstract interface class PreferencesBackend {
+  Future<String?> getString(String key);
+  Future<List<String>?> getStringList(String key);
+  Future<void> setString(String key, String value);
+  Future<void> setStringList(String key, List<String> value);
+  Future<void> remove(String key);
+}
+
+class SharedPreferencesBackend implements PreferencesBackend {
+  SharedPreferencesBackend({SharedPreferencesAsync? preferences})
     : _preferences = preferences ?? SharedPreferencesAsync();
+
+  final SharedPreferencesAsync _preferences;
+
+  @override
+  Future<String?> getString(String key) => _preferences.getString(key);
+
+  @override
+  Future<List<String>?> getStringList(String key) {
+    return _preferences.getStringList(key);
+  }
+
+  @override
+  Future<void> setString(String key, String value) {
+    return _preferences.setString(key, value);
+  }
+
+  @override
+  Future<void> setStringList(String key, List<String> value) {
+    return _preferences.setStringList(key, value);
+  }
+
+  @override
+  Future<void> remove(String key) => _preferences.remove(key);
+}
+
+class SettingsStore {
+  SettingsStore({PreferencesBackend? preferences})
+    : _preferences = preferences ?? SharedPreferencesBackend();
 
   static const _settingsKey = 'focus.settings.v1';
 
-  final SharedPreferencesAsync _preferences;
+  final PreferencesBackend _preferences;
 
   Future<FocusSettings> load() async {
     final raw = await _preferences.getString(_settingsKey);
@@ -26,12 +62,12 @@ class SettingsStore {
 }
 
 class SessionStore {
-  SessionStore({SharedPreferencesAsync? preferences})
-    : _preferences = preferences ?? SharedPreferencesAsync();
+  SessionStore({PreferencesBackend? preferences})
+    : _preferences = preferences ?? SharedPreferencesBackend();
 
   static const _sessionsKey = 'focus.sessions.v1';
 
-  final SharedPreferencesAsync _preferences;
+  final PreferencesBackend _preferences;
 
   Future<List<FocusSession>> loadSessions() async {
     final raw = await _preferences.getStringList(_sessionsKey) ?? const [];
@@ -56,6 +92,20 @@ class SessionStore {
     await _preferences.setStringList(
       _sessionsKey,
       trimmed.map((entry) => entry.encode()).toList(),
+    );
+  }
+
+  Future<void> updateSessionOutcome(
+    String sessionId,
+    SessionOutcomeReport outcome,
+  ) async {
+    final sessions = await loadSessions();
+    final index = sessions.indexWhere((session) => session.id == sessionId);
+    if (index < 0) return;
+    sessions[index] = sessions[index].copyWith(outcomeReport: outcome);
+    await _preferences.setStringList(
+      _sessionsKey,
+      sessions.map((entry) => entry.encode()).toList(),
     );
   }
 

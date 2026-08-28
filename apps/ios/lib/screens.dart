@@ -38,84 +38,123 @@ class FocusScreen extends StatelessWidget {
         return Scaffold(
           backgroundColor: Colors.black,
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-              child: Column(
-                children: [
-                  _TopBar(
-                    onStats: () => Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (_) => StatsScreen(sessionStore: sessionStore),
-                      ),
-                    ),
-                    onSettings: () => Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (_) => SettingsScreen(
-                          settings: engine.settings,
-                          onChanged: engine.updateSettings,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxHeight < 720;
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 16 : 24,
+                    compact ? 10 : 16,
+                    compact ? 16 : 24,
+                    compact ? 16 : 28,
+                  ),
+                  child: Column(
+                    children: [
+                      _TopBar(
+                        compact: compact,
+                        onStats: () => Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) =>
+                                StatsScreen(sessionStore: sessionStore),
+                          ),
+                        ),
+                        onSettings: () => Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) => SettingsScreen(
+                              settings: engine.settings,
+                              onChanged: engine.updateSettings,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 56),
-                  const Text(
-                    'Focus',
-                    style: TextStyle(
-                      color: appBlue,
-                      fontSize: 44,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    engine.phaseLabel,
-                    style: const TextStyle(
-                      color: appMuted,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  CircleTimer(
-                    progress: engine.progress,
-                    remainingSeconds: engine.remainingSeconds,
-                    phase: engine.phase,
-                  ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      RoundIconButton(
-                        icon: CupertinoIcons.music_note_2,
-                        onPressed: () => _showSoundSheet(context, engine),
+                      SizedBox(height: compact ? 14 : 42),
+                      Text(
+                        'Focus',
+                        style: TextStyle(
+                          color: appBlue,
+                          fontSize: compact ? 36 : 44,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
                       ),
-                      RoundIconButton(
-                        icon: primaryIcon,
-                        background: appBlue,
-                        size: 96,
-                        onPressed: isResting
-                            ? null
-                            : () {
-                                if (isRunning) {
-                                  engine.pause();
-                                } else if (engine.phase ==
-                                    SessionPhase.paused) {
-                                  engine.resume();
-                                } else {
-                                  engine.startFocus();
-                                }
-                              },
+                      SizedBox(height: compact ? 8 : 18),
+                      Text(
+                        engine.phaseLabel,
+                        style: TextStyle(
+                          color: appMuted,
+                          fontSize: compact ? 18 : 22,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      RoundIconButton(
-                        icon: CupertinoIcons.stop_fill,
-                        iconColor: canStop ? Colors.white : appMuted,
-                        onPressed: canStop ? engine.stop : null,
+                      Expanded(
+                        child: Center(
+                          child: CircleTimer(
+                            progress: engine.progress,
+                            remainingSeconds: engine.remainingSeconds,
+                            phase: engine.phase,
+                            maxSize: compact ? 220 : 420,
+                          ),
+                        ),
                       ),
+                      SizedBox(height: compact ? 8 : 16),
+                      if (engine.activeStudyAssignment case final assignment?)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            assignment.condition == StudyCondition.noChecks
+                                ? '本地实验对照轮次：本轮不显示目标检查'
+                                : '本地实验稀疏检查轮次',
+                            style: const TextStyle(
+                              color: appMuted,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      if (engine.phase == SessionPhase.microBreak)
+                        GoalCheckCard(
+                          goal: engine.settings.sessionGoal,
+                          onTask: engine.recordOnTask,
+                          offTask: engine.recordOffTask,
+                          onSkip: engine.skipPrompt,
+                        )
+                      else if (engine.phase == SessionPhase.completed)
+                        _SessionFeedbackCard(engine: engine)
+                      else
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            RoundIconButton(
+                              icon: CupertinoIcons.music_note_2,
+                              onPressed: () => _showSoundSheet(context, engine),
+                            ),
+                            RoundIconButton(
+                              icon: primaryIcon,
+                              background: appBlue,
+                              size: 96,
+                              onPressed: isResting
+                                  ? null
+                                  : () {
+                                      if (isRunning) {
+                                        engine.pause();
+                                      } else if (engine.phase ==
+                                          SessionPhase.paused) {
+                                        engine.resume();
+                                      } else {
+                                        engine.startFocus();
+                                      }
+                                    },
+                            ),
+                            RoundIconButton(
+                              icon: CupertinoIcons.stop_fill,
+                              iconColor: canStop ? Colors.white : appMuted,
+                              onPressed: canStop ? engine.stop : null,
+                            ),
+                          ],
+                        ),
                     ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         );
@@ -128,7 +167,7 @@ class FocusScreen extends StatelessWidget {
       context: context,
       builder: (context) => CupertinoActionSheet(
         title: const Text('提示音'),
-        message: const Text('前台使用系统提示音与轻触反馈；锁屏使用 iOS 本地通知声音。'),
+        message: const Text('声音和锁屏通知均为可选项；默认静音，避免额外打断。'),
         actions: SoundPreset.values
             .map(
               (preset) => CupertinoActionSheetAction(
@@ -151,11 +190,113 @@ class FocusScreen extends StatelessWidget {
   }
 }
 
+class _SessionFeedbackCard extends StatelessWidget {
+  const _SessionFeedbackCard({required this.engine});
+
+  final FocusEngine engine;
+
+  @override
+  Widget build(BuildContext context) {
+    final outcome = engine.outcomeReport;
+    return Semantics(
+      container: true,
+      label: '可选会话复盘，仅保存在本机',
+      child: GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '可选复盘 · 仅本机',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text('这轮是否取得了有意义的进展？', style: TextStyle(color: appMuted)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _feedbackButton(
+                  '有进展',
+                  outcome?.meaningfulProgress == MeaningfulProgressResponse.yes,
+                  () => engine.recordMeaningfulProgress(
+                    MeaningfulProgressResponse.yes,
+                  ),
+                ),
+                _feedbackButton(
+                  '没有',
+                  outcome?.meaningfulProgress == MeaningfulProgressResponse.no,
+                  () => engine.recordMeaningfulProgress(
+                    MeaningfulProgressResponse.no,
+                  ),
+                ),
+                _feedbackButton(
+                  '不确定',
+                  outcome?.meaningfulProgress ==
+                      MeaningfulProgressResponse.unsure,
+                  () => engine.recordMeaningfulProgress(
+                    MeaningfulProgressResponse.unsure,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text('本轮计时流程的打扰程度？', style: TextStyle(color: appMuted)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _feedbackButton(
+                  '0 无打扰',
+                  outcome?.interruptionBurden == 0,
+                  () => engine.recordInterruptionBurden(0),
+                ),
+                _feedbackButton(
+                  '2 一般',
+                  outcome?.interruptionBurden == 2,
+                  () => engine.recordInterruptionBurden(2),
+                ),
+                _feedbackButton(
+                  '4 明显',
+                  outcome?.interruptionBurden == 4,
+                  () => engine.recordInterruptionBurden(4),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _feedbackButton(String label, bool selected, VoidCallback onPressed) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44, minWidth: 88),
+      child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        color: selected ? appBlue : const Color(0xFF2C2C2E),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.onStats, required this.onSettings});
+  const _TopBar({
+    required this.onStats,
+    required this.onSettings,
+    required this.compact,
+  });
 
   final VoidCallback onStats;
   final VoidCallback onSettings;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -163,26 +304,29 @@ class _TopBar extends StatelessWidget {
       children: [
         RoundIconButton(
           icon: CupertinoIcons.chart_pie_fill,
-          size: 58,
+          size: compact ? 50 : 58,
           iconColor: appBlue,
           onPressed: onStats,
         ),
         const Spacer(),
         Container(
-          constraints: const BoxConstraints(maxWidth: 230),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          constraints: BoxConstraints(maxWidth: compact ? 150 : 230),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 14,
+            vertical: compact ? 7 : 9,
+          ),
           decoration: BoxDecoration(
             color: appCardSoft,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
-          child: const Text(
-            '专注算法 v1',
+          child: Text(
+            '稀疏检查 · 本地',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
-              fontSize: 16,
+              fontSize: compact ? 13 : 16,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -190,7 +334,7 @@ class _TopBar extends StatelessWidget {
         const Spacer(),
         RoundIconButton(
           icon: CupertinoIcons.gear_alt_fill,
-          size: 58,
+          size: compact ? 50 : 58,
           iconColor: appMuted,
           onPressed: onSettings,
         ),
@@ -215,11 +359,27 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late FocusSettings settings;
+  late final TextEditingController _goalController;
+  late final TextEditingController _triggerController;
+  late final TextEditingController _recoveryController;
 
   @override
   void initState() {
     super.initState();
     settings = widget.settings;
+    _goalController = TextEditingController(text: settings.sessionGoal);
+    _triggerController = TextEditingController(
+      text: settings.distractionTrigger,
+    );
+    _recoveryController = TextEditingController(text: settings.recoveryAction);
+  }
+
+  @override
+  void dispose() {
+    _goalController.dispose();
+    _triggerController.dispose();
+    _recoveryController.dispose();
+    super.dispose();
   }
 
   Future<void> _save(FocusSettings next) async {
@@ -236,22 +396,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.fromLTRB(22, 14, 22, 40),
           children: [
             _NavTitle(title: '设置', onBack: Navigator.of(context).pop),
-            const SectionLabel('模式选择'),
-            const GlassCard(
+            const SectionLabel('本轮意图'),
+            GlassCard(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SettingsRow(
-                    title: '随机提示音（默认）',
-                    trailing: Icon(
-                      CupertinoIcons.check_mark,
-                      color: appBlue,
-                      size: 28,
+                  const Text(
+                    '当前要推进的具体小目标',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Divider(color: Color(0xFF3A3A3C)),
-                  SettingsRow(title: '番茄时钟法'),
-                  Divider(color: Color(0xFF3A3A3C)),
-                  SettingsRow(title: '防走神模式'),
+                  const SizedBox(height: 12),
+                  CupertinoTextField(
+                    controller: _goalController,
+                    maxLength: 160,
+                    placeholder: '例如：写完方法部分第一稿',
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (value) =>
+                        _save(settings.copyWith(sessionGoal: value)),
+                    style: const TextStyle(color: Colors.white, fontSize: 17),
+                    placeholderStyle: const TextStyle(
+                      color: appMuted,
+                      fontSize: 17,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '如果……（分心触发）',
+                    style: TextStyle(color: appMuted, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  CupertinoTextField(
+                    controller: _triggerController,
+                    maxLength: 160,
+                    placeholder: '例如：我发现自己打开了无关页面',
+                    textInputAction: TextInputAction.next,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '那么……（下一步动作）',
+                    style: TextStyle(color: appMuted, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  CupertinoTextField(
+                    controller: _recoveryController,
+                    maxLength: 160,
+                    placeholder: '例如：关闭页面并写完下一句话',
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _saveIntent(),
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141416),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    settings.ifThenPlan,
+                    style: const TextStyle(
+                      color: appMuted,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: CupertinoButton(
+                      onPressed: _saveIntent,
+                      child: const Text('保存目标与恢复计划'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -291,16 +526,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            const SectionLabel('随机提示音'),
+            const SectionLabel('稀疏目标检查'),
             GlassCard(
               child: Column(
                 children: [
+                  SettingsRow(
+                    title: '启用目标检查',
+                    trailing: CupertinoSwitch(
+                      value: settings.goalChecksEnabled,
+                      onChanged: (value) =>
+                          _save(settings.copyWith(goalChecksEnabled: value)),
+                    ),
+                  ),
+                  const Divider(color: Color(0xFF3A3A3C)),
                   SettingsRow(
                     title: '最小间隔',
                     value: '${settings.minPromptIntervalMinutes} 分钟',
                     onTap: () => _pickNumber(
                       title: '最小间隔',
-                      min: 1,
+                      min: 5,
                       max: settings.maxPromptIntervalMinutes,
                       value: settings.minPromptIntervalMinutes,
                       unit: '分钟',
@@ -316,7 +560,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _pickNumber(
                       title: '最大间隔',
                       min: settings.minPromptIntervalMinutes,
-                      max: 30,
+                      max: 45,
                       value: settings.maxPromptIntervalMinutes,
                       unit: '分钟',
                       onSelected: (value) => _save(
@@ -326,12 +570,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(color: Color(0xFF3A3A3C)),
                   SettingsRow(
-                    title: '微休息时长',
+                    title: '检查窗口',
                     value: '${settings.microBreakSeconds} 秒',
                     onTap: () => _pickNumber(
-                      title: '微休息时长',
-                      min: 3,
-                      max: 30,
+                      title: '检查窗口',
+                      min: 5,
+                      max: 60,
                       value: settings.microBreakSeconds,
                       unit: '秒',
                       onSelected: (value) =>
@@ -343,7 +587,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              '每隔 ${settings.minPromptIntervalMinutes}-${settings.maxPromptIntervalMinutes} 分钟随机播放微休息提示音，并在 ${settings.microBreakSeconds} 秒后结束。',
+              settings.goalChecksEnabled
+                  ? '每隔 ${settings.minPromptIntervalMinutes}-${settings.maxPromptIntervalMinutes} 分钟出现一次可跳过的目标检查，并在 ${settings.microBreakSeconds} 秒后自动关闭。间隔是透明、可调的启发式，不是医学处方。'
+                  : '本轮不会出现非必要目标检查；计时结束提示仍由通知设置独立控制。',
               style: const TextStyle(
                 color: appMuted,
                 fontSize: 16,
@@ -355,7 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   SettingsRow(
-                    title: '专注期间提示音',
+                    title: '前台提示音（默认关闭）',
                     trailing: CupertinoSwitch(
                       value: settings.foregroundPromptSoundEnabled,
                       onChanged: (value) => _save(
@@ -366,13 +612,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(color: Color(0xFF3A3A3C)),
                   SettingsRow(
-                    title: '微休息开始',
+                    title: '检查提示',
                     value: settings.soundPreset.label,
                     onTap: () => _pickSound(),
                   ),
                   const Divider(color: Color(0xFF3A3A3C)),
                   SettingsRow(
-                    title: '锁屏通知',
+                    title: '锁屏通知（默认关闭）',
                     trailing: CupertinoSwitch(
                       value: settings.lockScreenNotifications,
                       onChanged: (value) => _save(
@@ -384,8 +630,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+            const SectionLabel('个性化'),
+            GlassCard(
+              child: SettingsRow(
+                title: '自适应降低打扰',
+                trailing: CupertinoSwitch(
+                  value: settings.adaptiveCadence,
+                  onChanged: (value) =>
+                      _save(settings.copyWith(adaptiveCadence: value)),
+                  activeTrackColor: const Color(0xFF30D158),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '只有累积足够本地响应后才调整频率；跳过较多时会降低提示负担。该规则尚未经过产品级随机对照验证。',
+              style: TextStyle(color: appMuted, fontSize: 15, height: 1.4),
+            ),
+            const SectionLabel('本地研究（实验性）'),
+            GlassCard(
+              child: SettingsRow(
+                title: '自愿交叉可行性实验',
+                value: settings.studyEnrollment?.isActive == true
+                    ? '已加入 · 第 ${settings.studyEnrollment!.nextSessionIndex + 1} 轮'
+                    : '默认关闭',
+                trailing: CupertinoSwitch(
+                  value: settings.studyEnrollment?.isActive == true,
+                  onChanged: _setStudyEnabled,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '加入后，每轮开始前会持久化分配“无检查”或“稀疏检查”；会后回答仍可跳过，数据不上传，可随时退出。该模式只支持探索性评估，不代表产品已被验证。',
+              style: TextStyle(color: appMuted, fontSize: 15, height: 1.4),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _setStudyEnabled(bool enabled) async {
+    final current = settings.studyEnrollment;
+    if (!enabled) {
+      if (current != null && current.isActive) {
+        await _save(
+          settings.copyWith(studyEnrollment: current.withdraw(DateTime.now())),
+        );
+      }
+      return;
+    }
+
+    final accepted = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('自愿加入本地交叉实验？'),
+        content: const Text(
+          '部分会话不会显示目标检查，部分会话使用当前稀疏检查。分配会在会话开始前保存在本机；会后反馈可跳过；不会自动上传。你可以随时退出，退出不会删除既有本地记录。',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('我了解并自愿加入'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+
+    final random = Random.secure();
+    final enrollment = createLocalFeasibilityEnrollment(
+      participantCode: localParticipantCode(
+        random.nextInt(1 << 31),
+        random.nextInt(1 << 31),
+      ),
+      consentedAt: DateTime.now(),
+      sequence: random.nextBool() ? StudySequence.ab : StudySequence.ba,
+    );
+    await _save(settings.copyWith(studyEnrollment: enrollment));
+  }
+
+  Future<void> _saveIntent() {
+    return _save(
+      settings.copyWith(
+        sessionGoal: _goalController.text,
+        distractionTrigger: _triggerController.text,
+        recoveryAction: _recoveryController.text,
       ),
     );
   }
@@ -394,7 +730,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showCupertinoModalPopup<void>(
       context: context,
       builder: (context) => CupertinoActionSheet(
-        title: const Text('微休息开始'),
+        title: const Text('检查提示'),
         actions: SoundPreset.values
             .map(
               (preset) => CupertinoActionSheetAction(
@@ -510,6 +846,9 @@ class StatsScreen extends StatelessWidget {
             final completionRate = sessions.isEmpty
                 ? 0
                 : (completed / sessions.length * 100).round();
+            final outcomes = summarizeLocalOutcomes(sessions);
+            final userValuedRate = outcomes.userValuedSessionRate;
+            final highBurdenRate = outcomes.highBurdenRate;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(22, 14, 22, 40),
@@ -527,18 +866,30 @@ class StatsScreen extends StatelessWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
                     _MetricCard(
-                      title: '今日专注',
+                      title: '今日计时',
                       value: formatDurationCompact(todaySeconds),
                     ),
                     _MetricCard(title: '今日周期', value: '${today.length} 个'),
                     _MetricCard(
-                      title: '总专注',
+                      title: '累计计时',
                       value: formatDurationCompact(totalSeconds),
                     ),
-                    _MetricCard(title: '完成率', value: '$completionRate%'),
+                    _MetricCard(title: '计时完成率', value: '$completionRate%'),
+                    _MetricCard(
+                      title: '自报有进展',
+                      value: userValuedRate == null
+                          ? '暂无回答'
+                          : '${(userValuedRate * 100).round()}%',
+                    ),
+                    _MetricCard(
+                      title: '高打扰反馈',
+                      value: highBurdenRate == null
+                          ? '暂无回答'
+                          : '${(highBurdenRate * 100).round()}%',
+                    ),
                   ],
                 ),
-                const SectionLabel('专注记录'),
+                const SectionLabel('计时记录'),
                 GlassCard(
                   child: sessions.isEmpty
                       ? const Text(
@@ -575,7 +926,7 @@ class StatsScreen extends StatelessWidget {
                           }).toList(),
                         ),
                 ),
-                const SectionLabel('最佳专注时间'),
+                const SectionLabel('计时分布'),
                 GlassCard(
                   child: SizedBox(
                     height: 300,

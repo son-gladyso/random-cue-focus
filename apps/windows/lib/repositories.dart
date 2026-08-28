@@ -12,23 +12,21 @@ class SessionRepository {
   File get _settingsFile => File('${_baseDirectory.path}\\settings.json');
   File get _sessionsFile => File('${_baseDirectory.path}\\sessions.json');
 
-  Future<FocusSettings> loadSettings() async {
-    try {
-      final raw = await _settingsFile.readAsString();
-      return FocusSettings.decode(raw);
-    } catch (_) {
-      return const FocusSettings();
-    }
+  Future<FocusSettings> loadSettings() {
+    return _loadWithBackup(
+      _settingsFile,
+      FocusSettings.decode,
+      const FocusSettings(),
+    );
   }
 
   Future<void> saveSettings(FocusSettings settings) async {
     await _ensureDirectory();
-    await _settingsFile.writeAsString(settings.normalized().encode());
+    await _writeAtomically(_settingsFile, settings.normalized().encode());
   }
 
-  Future<List<FocusSession>> loadSessions() async {
-    try {
-      final raw = await _sessionsFile.readAsString();
+  Future<List<FocusSession>> loadSessions() {
+    return _loadWithBackup(_sessionsFile, (raw) {
       final values = (jsonDecode(raw) as List).whereType<String>();
       final sessions = <FocusSession>[];
       for (final value in values) {
@@ -40,26 +38,44 @@ class SessionRepository {
       }
       sessions.sort((a, b) => a.startedAt.compareTo(b.startedAt));
       return sessions;
-    } catch (_) {
-      return const [];
-    }
+    }, const <FocusSession>[]);
   }
 
   Future<void> appendSession(FocusSession session) async {
     await _ensureDirectory();
-    final sessions = await loadSessions();
+    final sessions = [...await loadSessions()];
     sessions.add(session);
     final trimmed = sessions.length > 1000
         ? sessions.sublist(sessions.length - 1000)
         : sessions;
-    await _sessionsFile.writeAsString(
+    await _writeAtomically(
+      _sessionsFile,
       jsonEncode(trimmed.map((entry) => entry.encode()).toList()),
     );
   }
 
+  Future<void> updateSessionOutcome(
+    String sessionId,
+    SessionOutcomeReport outcome,
+  ) async {
+    await _ensureDirectory();
+    final sessions = [...await loadSessions()];
+    final index = sessions.indexWhere((session) => session.id == sessionId);
+    if (index < 0) return;
+    sessions[index] = sessions[index].copyWith(outcomeReport: outcome);
+    await _writeAtomically(
+      _sessionsFile,
+      jsonEncode(sessions.map((entry) => entry.encode()).toList()),
+    );
+  }
+
   Future<void> clearSessions() async {
-    if (await _sessionsFile.exists()) {
-      await _sessionsFile.delete();
+    for (final file in [
+      _sessionsFile,
+      _temporaryFile(_sessionsFile),
+      _backupFile(_sessionsFile),
+    ]) {
+      if (await file.exists()) await file.delete();
     }
   }
 
@@ -68,6 +84,51 @@ class SessionRepository {
       await _baseDirectory.create(recursive: true);
     }
   }
+
+  Future<T> _loadWithBackup<T>(
+    File target,
+    T Function(String raw) decode,
+    T fallback,
+  ) async {
+    for (final candidate in [target, _backupFile(target)]) {
+      try {
+        if (await candidate.exists()) {
+          return decode(await candidate.readAsString());
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+    return fallback;
+  }
+
+  Future<void> _writeAtomically(File target, String contents) async {
+    final temporary = _temporaryFile(target);
+    final backup = _backupFile(target);
+    if (await temporary.exists()) await temporary.delete();
+    await temporary.writeAsString(contents, flush: true);
+
+    var originalMoved = false;
+    try {
+      if (await backup.exists()) await backup.delete();
+      if (await target.exists()) {
+        await target.rename(backup.path);
+        originalMoved = true;
+      }
+      await temporary.rename(target.path);
+      if (await backup.exists()) await backup.delete();
+    } catch (_) {
+      if (!await target.exists() && originalMoved && await backup.exists()) {
+        await backup.rename(target.path);
+      }
+      rethrow;
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
+  }
+
+  File _temporaryFile(File target) => File('${target.path}.tmp');
+  File _backupFile(File target) => File('${target.path}.backup');
 }
 
 Directory _defaultBaseDirectory() {
@@ -118,7 +179,9 @@ class StatsQueryService {
     for (final session in sessions) {
       totalSeconds += session.focusSeconds;
       hours[session.startedAt.hour] += session.focusSeconds;
-      promptCount += session.promptEvents.length;
+      promptCount += session.promptEvents
+          .where((event) => event.type == PromptResponseType.shown)
+          .length;
       skipCount += session.promptEvents
           .where((event) => event.type == PromptResponseType.skipped)
           .length;

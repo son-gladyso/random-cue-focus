@@ -1,0 +1,11 @@
+name: focus_core
+description: Shared, deterministic domain logic for Random Cue Focus.
+version: 0.2.0
+publish_to: none
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import 'charts.dart';
@@ -218,7 +220,7 @@ class _FocusPanel extends StatelessWidget {
           const Spacer(),
           if (latest != null)
             Text(
-              '最近一轮 ${formatDurationCompact(latest.focusSeconds)}，完成率 ${(latest.completionRate * 100).round()}%',
+              '最近一轮 ${formatDurationCompact(latest.focusSeconds)}，计时进度 ${(latest.completionRate * 100).round()}%',
               style: const TextStyle(
                 color: appMuted,
                 fontSize: 13,
@@ -249,6 +251,7 @@ class _PromptStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final microBreak = controller.phase == SessionPhase.microBreak;
+    final studyAssignment = controller.activeStudyAssignment;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       width: double.infinity,
@@ -264,14 +267,18 @@ class _PromptStrip extends StatelessWidget {
               : Colors.white.withValues(alpha: 0.06),
         ),
       ),
-      child: microBreak
+      child: controller.phase == SessionPhase.completed
+          ? _SessionOutcomeFeedback(controller: controller)
+          : microBreak
           ? Row(
               children: [
                 const Icon(Icons.visibility_rounded, color: appBlue, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '微休息 ${controller.microBreakRemaining} 秒：看远处，放松肩颈。',
+                    controller.settings.sessionGoal.isEmpty
+                        ? '目标检查 ${controller.microBreakRemaining} 秒：还在做刚才决定的事吗？'
+                        : '目标检查：${controller.settings.sessionGoal}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -280,16 +287,16 @@ class _PromptStrip extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: controller.acknowledgePrompt,
-                  child: const Text('完成'),
+                  onPressed: controller.recordOnTask,
+                  child: const Text('仍在目标'),
+                ),
+                TextButton(
+                  onPressed: controller.recordOffTask,
+                  child: const Text('刚刚走神'),
                 ),
                 TextButton(
                   onPressed: controller.delayPrompt,
-                  child: const Text('延后'),
-                ),
-                TextButton(
-                  onPressed: controller.skipPrompt,
-                  child: const Text('跳过'),
+                  child: const Text('稍后再问'),
                 ),
               ],
             )
@@ -300,8 +307,10 @@ class _PromptStrip extends StatelessWidget {
                 Expanded(
                   child: Text(
                     nextPrompt == null
-                        ? '本轮暂无更多提示，保持当前节奏。'
-                        : '下次随机提示约 ${formatSeconds(nextPrompt!)} 后出现。',
+                        ? studyAssignment?.condition == StudyCondition.noChecks
+                              ? '本地实验对照轮次：本轮不显示目标检查。'
+                              : '本轮暂无更多检查；时长不等于学习效果。'
+                        : '下次稀疏检查约 ${formatSeconds(nextPrompt!)} 后出现。',
                     style: const TextStyle(
                       color: appMuted,
                       fontSize: 14,
@@ -311,6 +320,92 @@ class _PromptStrip extends StatelessWidget {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _SessionOutcomeFeedback extends StatelessWidget {
+  const _SessionOutcomeFeedback({required this.controller});
+
+  final FocusController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final outcome = controller.outcomeReport;
+    return Semantics(
+      container: true,
+      label: '可选会话复盘，仅保存在本机',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '可选复盘 · 仅本机。计时完成不等于有效。',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('有意义的进展：', style: TextStyle(color: appMuted)),
+              _choice(
+                '有',
+                outcome?.meaningfulProgress == MeaningfulProgressResponse.yes,
+                () => controller.recordMeaningfulProgress(
+                  MeaningfulProgressResponse.yes,
+                ),
+              ),
+              _choice(
+                '没有',
+                outcome?.meaningfulProgress == MeaningfulProgressResponse.no,
+                () => controller.recordMeaningfulProgress(
+                  MeaningfulProgressResponse.no,
+                ),
+              ),
+              _choice(
+                '不确定',
+                outcome?.meaningfulProgress ==
+                    MeaningfulProgressResponse.unsure,
+                () => controller.recordMeaningfulProgress(
+                  MeaningfulProgressResponse.unsure,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('本轮流程打扰：', style: TextStyle(color: appMuted)),
+              _choice(
+                '0 无',
+                outcome?.interruptionBurden == 0,
+                () => controller.recordInterruptionBurden(0),
+              ),
+              _choice(
+                '2 一般',
+                outcome?.interruptionBurden == 2,
+                () => controller.recordInterruptionBurden(2),
+              ),
+              _choice(
+                '4 明显',
+                outcome?.interruptionBurden == 4,
+                () => controller.recordInterruptionBurden(4),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _choice(String label, bool selected, VoidCallback onPressed) {
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? appBlue.withValues(alpha: 0.22) : null,
+          side: BorderSide(color: selected ? appBlue : appMuted),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }
@@ -330,6 +425,7 @@ class _SidePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final outcomes = summarizeLocalOutcomes(sessions);
     return ListView(
       children: [
         GridView.count(
@@ -341,15 +437,27 @@ class _SidePanel extends StatelessWidget {
           childAspectRatio: 1.35,
           children: [
             MetricTile(
-              label: '今日专注',
+              label: '今日计时',
               value: formatDurationCompact(stats.todaySeconds),
             ),
-            MetricTile(label: '完成率', value: '${stats.completionPercent}%'),
+            MetricTile(label: '计时完成率', value: '${stats.completionPercent}%'),
             MetricTile(
-              label: '总专注',
+              label: '累计计时',
               value: formatDurationCompact(stats.totalSeconds),
             ),
-            MetricTile(label: '提示反馈', value: '${stats.promptCount} 次'),
+            MetricTile(label: '检查显示', value: '${stats.promptCount} 次'),
+            MetricTile(
+              label: '自报有进展',
+              value: outcomes.userValuedSessionRate == null
+                  ? '暂无回答'
+                  : '${(outcomes.userValuedSessionRate! * 100).round()}%',
+            ),
+            MetricTile(
+              label: '高打扰反馈',
+              value: outcomes.highBurdenRate == null
+                  ? '暂无回答'
+                  : '${(outcomes.highBurdenRate! * 100).round()}%',
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -363,7 +471,7 @@ class _SidePanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '最佳专注时间',
+                '计时分布',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -424,6 +532,70 @@ class _SettingsCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          const Text('本轮小目标', style: TextStyle(color: appMuted, fontSize: 13)),
+          const SizedBox(height: 6),
+          TextFormField(
+            key: ValueKey(settings.sessionGoal),
+            initialValue: settings.sessionGoal,
+            maxLength: 160,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (value) =>
+                onChanged(settings.copyWith(sessionGoal: value)),
+            decoration: const InputDecoration(
+              hintText: '例如：写完方法部分第一稿',
+              helperText: '按 Enter 保存；检查时只重现这个目标。',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            key: ValueKey(settings.distractionTrigger),
+            initialValue: settings.distractionTrigger,
+            maxLength: 160,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted: (value) =>
+                onChanged(settings.copyWith(distractionTrigger: value)),
+            decoration: const InputDecoration(
+              labelText: '如果……（分心触发）',
+              hintText: '例如：我发现自己打开了无关页面',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            key: ValueKey(settings.recoveryAction),
+            initialValue: settings.recoveryAction,
+            maxLength: 160,
+            textInputAction: TextInputAction.done,
+            onFieldSubmitted: (value) =>
+                onChanged(settings.copyWith(recoveryAction: value)),
+            decoration: const InputDecoration(
+              labelText: '那么……（下一步动作）',
+              hintText: '例如：关闭页面并写完下一句话',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            settings.ifThenPlan,
+            style: const TextStyle(color: appMuted, fontSize: 12, height: 1.35),
+          ),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: settings.goalChecksEnabled,
+            onChanged: (value) =>
+                onChanged(settings.copyWith(goalChecksEnabled: value)),
+            title: const Text(
+              '目标检查（可整段关闭）',
+              style: TextStyle(color: Colors.white, fontSize: 14),
+            ),
+            subtitle: const Text(
+              '关闭后本轮不会出现非必要检查。',
+              style: TextStyle(color: appMuted, fontSize: 12),
+            ),
+            activeThumbColor: appBlue,
+          ),
           _NumberSlider(
             label: '专注时间',
             value: settings.focusDurationMinutes,
@@ -445,7 +617,7 @@ class _SettingsCard extends StatelessWidget {
           _NumberSlider(
             label: '最小间隔',
             value: settings.minPromptIntervalMinutes,
-            min: 1,
+            min: 5,
             max: settings.maxPromptIntervalMinutes,
             unit: '分钟',
             onChanged: (value) =>
@@ -455,16 +627,16 @@ class _SettingsCard extends StatelessWidget {
             label: '最大间隔',
             value: settings.maxPromptIntervalMinutes,
             min: settings.minPromptIntervalMinutes,
-            max: 30,
+            max: 45,
             unit: '分钟',
             onChanged: (value) =>
                 onChanged(settings.copyWith(maxPromptIntervalMinutes: value)),
           ),
           _NumberSlider(
-            label: '微休息',
+            label: '检查窗口',
             value: settings.microBreakSeconds,
-            min: 3,
-            max: 30,
+            min: 5,
+            max: 60,
             unit: '秒',
             onChanged: (value) =>
                 onChanged(settings.copyWith(microBreakSeconds: value)),
@@ -476,7 +648,7 @@ class _SettingsCard extends StatelessWidget {
             onChanged: (value) =>
                 onChanged(settings.copyWith(desktopNotifications: value)),
             title: const Text(
-              '桌面通知',
+              '桌面通知（默认关闭）',
               style: TextStyle(color: Colors.white, fontSize: 14),
             ),
             activeThumbColor: appBlue,
@@ -488,14 +660,75 @@ class _SettingsCard extends StatelessWidget {
               settings.copyWith(foregroundPromptSoundEnabled: value),
             ),
             title: const Text(
-              '前台提示音',
+              '前台提示音（默认关闭）',
               style: TextStyle(color: Colors.white, fontSize: 14),
+            ),
+            activeThumbColor: appBlue,
+          ),
+          const Divider(color: Color(0xFF31343B)),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: settings.studyEnrollment?.isActive == true,
+            onChanged: (value) => _setStudyEnabled(context, value),
+            title: const Text(
+              '本地交叉实验（自愿）',
+              style: TextStyle(color: Colors.white, fontSize: 14),
+            ),
+            subtitle: Text(
+              settings.studyEnrollment?.isActive == true
+                  ? '已加入；第 ${settings.studyEnrollment!.nextSessionIndex + 1} 轮将在开始前分配。'
+                  : '默认关闭；数据不上传，可随时退出。',
+              style: const TextStyle(color: appMuted, fontSize: 12),
             ),
             activeThumbColor: appBlue,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _setStudyEnabled(BuildContext context, bool enabled) async {
+    final current = settings.studyEnrollment;
+    if (!enabled) {
+      if (current != null && current.isActive) {
+        await onChanged(
+          settings.copyWith(studyEnrollment: current.withdraw(DateTime.now())),
+        );
+      }
+      return;
+    }
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('自愿加入本地交叉实验？'),
+        content: const Text(
+          '部分会话不会显示目标检查，部分会话使用当前稀疏检查。分配会在会话开始前保存在本机；会后反馈可跳过；不会自动上传。你可以随时退出，退出不会删除既有本地记录。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('我了解并自愿加入'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !context.mounted) return;
+
+    final random = Random.secure();
+    final enrollment = createLocalFeasibilityEnrollment(
+      participantCode: localParticipantCode(
+        random.nextInt(1 << 31),
+        random.nextInt(1 << 31),
+      ),
+      consentedAt: DateTime.now(),
+      sequence: random.nextBool() ? StudySequence.ab : StudySequence.ba,
+    );
+    await onChanged(settings.copyWith(studyEnrollment: enrollment));
   }
 }
 
@@ -582,7 +815,9 @@ class _RecentSessions extends StatelessWidget {
               style: TextStyle(color: appMuted, fontSize: 14),
             )
           else
-            ...sessions.reversed.take(5).map(
+            ...sessions.reversed
+                .take(5)
+                .map(
                   (session) => Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
