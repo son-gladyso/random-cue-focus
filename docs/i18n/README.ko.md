@@ -1,6 +1,6 @@
 # Random Cue Focus
 
-[简体中文](README.zh-CN.md) · [English](../../README.md) · [日本語](README.ja.md) · 한국어 · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md)
+[简体中文](README.zh-CN.md) · [English](../../README.md) · [日本語](README.ja.md) · 한국어 · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [繁體中文](README.zh-TW.md)
 
 **집중할 때마다 알림이 쏟아지지 않도록, 스스로 선택한 작업으로 돌아오세요.**
 
