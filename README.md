@@ -1,5 +1,7 @@
 # Random Cue Focus
 
+[简体中文](docs/i18n/README.zh-CN.md) · English · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Español](docs/i18n/README.es.md) · [Français](docs/i18n/README.fr.md) · [Deutsch](docs/i18n/README.de.md) · [Português (Brasil)](docs/i18n/README.pt-BR.md)
+
 **Return to the task you chose, without making every focus session a stream of alerts.**
 
 Random Cue Focus is a local-first Flutter companion for people who want an occasional, optional reminder of their own goal on iOS or Windows. Version `0.2.0` replaces the prototype's frequent, mandatory “microbreak” framing with sparse, skippable goal checks that are silent and non-notifying by default.
