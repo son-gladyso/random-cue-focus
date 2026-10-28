@@ -1,12 +1,28 @@
 # Evidence base and claim boundaries
 
-Last reviewed: 2026-08-27
+Last reviewed: 2026-10-28 (learning-workflow summary and source 22 added; earlier claim limits retained)
 
 ## Decision summary
 
 The original product hypothesis—frequent random audible cues followed by a mandatory 10-second microbreak—was not supported strongly enough for a default experience. The upgrade uses a lower-interruption hypothesis: state a goal, receive an occasional optional check, record current state, and apply a prewritten recovery action after distraction.
 
 No reviewed study directly validates Random Cue Focus, its 12–18-minute default, or an adaptive timer as a treatment or guaranteed productivity tool. The interval is a conservative, user-adjustable product heuristic, and nonessential checks can be disabled for the whole session. It should be changed or removed if product data shows burden without user-valued benefit. Off-task self-reports never cause more frequent checks; high skip burden may only reduce frequency.
+
+## How the evidence relates to studying
+
+The current app supports a small planning–monitoring–reflection loop around the learner's own materials. A concrete goal names what to read, solve, or explain; a user-written if–then plan names a next action after distraction; optional checks and local history make the session available for reflection. These are process supports. Reading, recalling, solving, and correcting remain the learner's work.
+
+| Research | Experimental finding | Implemented connection | Inference limit |
+| --- | --- | --- | --- |
+| Gollwitzer & Sheeran (2006), source 6 | A meta-analysis of 94 independent tests found an average goal-attainment benefit from if–then plans. | Editable distraction trigger and next recovery action. | Settings and effects vary; retain the modern bias-robust qualification in source 16. This does not establish a benefit from random cues. |
+| Harkin et al. (2016), source 22 | Across 138 randomized studies and 19,951 participants, interventions increasing progress monitoring improved goal attainment on average. | Optional goal checks, progress self-ratings, and local session review. | The interventions and outcomes differ from this app. The result does not establish better grades, retention, or an optimal check frequency. |
+| Stothart et al. (2015), source 2 | Receiving phone notifications disrupted an attention-demanding task even without interacting with the phone. | Sound and notifications default off; checks are sparse, skippable, and can be disabled. | A design constraint, not evidence that the current interval is optimal or that all checks are harmless. |
+
+**Product learning-outcome evidence: not yet available.** No trial has measured learning gains from Random Cue Focus. The local crossover is a protocol and an opt-in comparison mechanism, not a published result; timer duration and self-reported progress are not objective learning scores. Automated tests are engineering verification.
+
+The current UI does not implement recall questions, answer correction, or scheduled review of learning content. The [learning-mode document](LEARNING_MODE_SPEC.md) is a specification, even where the data model already has learning-related fields. Retrieval and spacing papers below must not be presented as validation of a delivered learning mode.
+
+A possible future study could compare equivalent learning tasks with and without the current goal-check workflow, using delayed retention and new transfer questions as well as interruption burden and time spent. Predefine allocation and scoring and report missing follow-up data. This evaluation has not been performed; it extends beyond the existing experience-comparison protocol and must not be reported as completed.
 
 ## Claim-to-feature matrix
 
@@ -40,12 +56,13 @@ No reviewed study directly validates Random Cue Focus, its 12–18-minute defaul
 13. Kawashima, Hinuma, and Tanaka (2023), “Ecological momentary assessment of mind-wandering: meta-analysis and systematic review.” *Scientific Reports*. [Full text](https://www.nature.com/articles/s41598-023-29854-9)
 14. Williams et al. (2021), “Compliance With Mobile Ecological Momentary Assessment…in Adults.” *JMIR*. [PubMed](https://pubmed.ncbi.nlm.nih.gov/33656451/)
 15. W3C, “Understanding Success Criterion 2.2.4: Interruptions.” [Accessibility guidance](https://www.w3.org/WAI/WCAG22/Understanding/interruptions.html)
-16. Sheeran et al. (2024), “The when and how of planning: meta-analysis of implementation intentions.” [DOI](https://doi.org/10.1080/10463283.2024.2334563)
+16. Sheeran, Listrom, and Gollwitzer (online 2024; issue publication 2025), “The when and how of planning: meta-analysis of implementation intentions.” [DOI](https://doi.org/10.1080/10463283.2024.2334563)
 17. Yang et al. (2021), “Testing (quizzing) boosts classroom learning: a systematic and meta-analytic review.” [PubMed](https://pubmed.ncbi.nlm.nih.gov/33683913/)
 18. Rowland (2014), “The effect of testing versus restudy on retention: a meta-analytic review.” [PubMed](https://pubmed.ncbi.nlm.nih.gov/25150680/)
 19. Roediger and Karpicke (2006), “Test-enhanced learning.” [PubMed](https://pubmed.ncbi.nlm.nih.gov/16507066/)
 20. Pan and Rickard (2018), “Transfer of test-enhanced learning: meta-analytic review and synthesis.” [DOI](https://doi.org/10.1037/bul0000151)
 21. Wisniewski, Zierer, and Hattie (2020), “The power of feedback revisited.” [Full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC6987456/)
+22. Harkin et al. (2016), “Does monitoring goal progress promote goal attainment? A meta-analysis of the experimental evidence.” *Psychological Bulletin, 142*(2), 198–229. [DOI](https://doi.org/10.1037/bul0000025). [PubMed abstract](https://pubmed.ncbi.nlm.nih.gov/26479070/).
 
 ## Explicit exclusions
 

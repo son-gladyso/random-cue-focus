@@ -2,13 +2,21 @@
 
 [简体中文](README.zh-CN.md) · [English](../../README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · Português (Brasil) · [Русский](README.ru.md) · [繁體中文](README.zh-TW.md)
 
-**Volte à tarefa que você escolheu, sem transformar cada sessão de foco em uma sequência de alertas.**
+**Transforme “preciso estudar” em um próximo passo concreto e saiba onde retomar após se distrair.**
 
-Random Cue Focus é um aplicativo complementar em Flutter que prioriza o armazenamento local, para quem quer um lembrete ocasional e opcional do próprio objetivo no iOS ou Windows. A versão `0.2.0` substitui a proposta de “micropausas” frequentes e obrigatórias do protótipo por verificações de objetivo espaçadas e que podem ser puladas, silenciosas e sem notificações por padrão.
+Random Cue Focus é um companheiro de estudo Flutter com armazenamento local para iOS e Windows. Defina o que aprender, escreva uma pequena ação de retomada e use verificações opcionais sem parar o temporizador. O histórico local e a avaliação opcional do progresso ajudam a refletir sobre a sessão.
 
-O produto é **informado por evidências, mas não validado clinicamente**. Ele ajuda a definir um objetivo concreto, verificar de vez em quando se você ainda está trabalhando nele e usar um plano simples de retomada “se… então…” após uma distração. Não afirma diagnosticar a atenção, aumentar a produtividade nem melhorar a aprendizagem apenas pelo uso de um temporizador.
+Use com livros, exercícios ou anotações: ele apoia o planejamento e o acompanhamento da aprendizagem. A versão `0.2.0` usa verificações espaçadas, que podem ser puladas, silenciosas e sem notificações por padrão.
 
 [Experimente uma sessão](#a-session-in-practice) · [Ambiente de desenvolvimento](#develop) · [Preparação para lançamento](#release-status) · [Perguntas frequentes](#common-questions) · [Contribua](#help-make-it-easier-to-use-and-verify)
+
+<a id="learning-workflow"></a>
+
+## Como usar em uma sessão de estudo
+
+Troque “estudar biologia” por “ler a seção de divisão celular e escrever três diferenças entre mitose e meiose”. Acrescente “se eu abrir uma aba sem relação, volto ao próximo parágrafo e escrevo uma comparação”. Na verificação opcional, retome o objetivo ou continue lendo; depois, registre o que concluiu e o incômodo das interrupções.
+
+Para resolver problemas, defina os exercícios e o passo de retomada; para revisar, escolha os conceitos que vai recordar e explicar com seus materiais. Ler, resolver, recordar e conferir cabe a você. O plano editável não é uma intervenção automática de orientação.
 
 <a id="when-it-may-fit"></a>
 
@@ -53,17 +61,21 @@ As instruções de compilação e execução estão em [Desenvolvimento](#develo
 As configurações e os eventos de sessão existentes da versão `0.1.x` são migrados, e não descartados silenciosamente. A versão `6` do esquema mantém todas as migrações anteriores, a inscrição explícita no estudo e a atribuição por sessão, acrescentando, para novas sessões de estudo, um retrato do estado real de ativação das verificações, do intervalo e da janela de resposta. O esquema v2 de exportação de pesquisa remove o timestamp absoluto da atribuição, além dos IDs brutos de sessão, datas e texto livre. A cadência adaptativa é uma heurística determinística e inspecionável, não um modelo de aprendizado de máquina, e aguarda pelo menos três sessões e seis respostas antes de alterar um intervalo.
 
 <a id="evidence-boundary"></a>
+<a id="limites-das-evidências"></a>
 
-## Limites das evidências
+## Pesquisa por trás do fluxo
 
-O projeto dá mais peso a resultados diretos e convergentes e deixa explícitas as inferências indiretas:
+| Estudo e experimento | Resultado | Relação e limite |
+| --- | --- | --- |
+| [Gollwitzer & Sheeran (2006)](https://doi.org/10.1016/S0065-2601(06)38002-1) | A metanálise de planos se–então encontrou benefícios médios em contextos variados; estimativas modernas robustas a vieses são menores. | Apoia escrever um plano de retomada; não comprova benefício de lembretes aleatórios para aprender. |
+| [Harkin et al. (2016)](https://doi.org/10.1037/bul0000025) | 138 estudos randomizados, 19.951 participantes: promover o monitoramento melhorou em média o alcance de objetivos. | Apoia verificações e reflexão; não avaliou este app nem seu efeito nas notas. |
+| [Stothart et al. (2015)](https://doi.org/10.1037/xhp0000100) | Notificações prejudicaram uma tarefa de atenção mesmo sem manusear o telefone. | Orienta verificações silenciosas e opcionais; não valida o intervalo de 12–18 minutos. |
 
-- Alertas podem atrapalhar uma tarefa em andamento; por isso, notificações externas e som ficam desativados por padrão.
-- Pausas curtas apresentam benefícios mais consistentes para vigor e fadiga do que para desempenho cognitivo; portanto, a verificação é opcional e nenhum ganho de desempenho é prometido.
-- Intenções de implementação escritas pelo usuário e automonitoramento são apoios plausíveis à retomada, mas estimativas modernas robustas a vieses são menores que as estimativas das primeiras metanálises. Este aplicativo específico e seu intervalo padrão de 12–18 minutos não foram validados em um ensaio randomizado do produto.
-- A prática de recuperação e o espaçamento têm evidências de aprendizagem mais fortes, mas um temporizador, por si só, não é uma intervenção de prática de recuperação.
+**São evidências de métodos e processos relacionados, não ganhos de aprendizagem medidos neste app.** Não foi realizado ensaio educacional do produto. O intervalo é uma heurística ajustável. O cruzamento local compara condições e experiência; não há resultados relatados. Histórico e autoavaliações não são notas de aprendizagem.
 
-Veja a [Base de evidências](../EVIDENCE_BASE.md), o [Plano de medição](../MEASUREMENT_PLAN.md), o [dicionário de dados](../DATA_DICTIONARY.md), o [protocolo cruzado local](../LOCAL_CROSSOVER_PROTOCOL.md) e a [especificação do modo experimental de aprendizagem](../LEARNING_MODE_SPEC.md) para a matriz entre afirmações e funcionalidades, limitações, desenho da avaliação, contrato do esquema e ciclo mínimo de aprendizagem compatível com as evidências.
+Recordação e espaçamento têm respaldo, mas o app atual não oferece perguntas de recuperação, correção de respostas ou revisão agendada de conteúdos. O [modo de aprendizagem](../LEARNING_MODE_SPEC.md) continua sendo uma especificação. Uma avaliação futura poderia comparar retenção tardia, transferência e incômodo; ela ainda não foi realizada.
+
+Veja [fontes e limites](../EVIDENCE_BASE.md), [plano de medição](../MEASUREMENT_PLAN.md), [dicionário de dados](../DATA_DICTIONARY.md) e [protocolo de cruzamento local](../LOCAL_CROSSOVER_PROTOCOL.md).
 
 <a id="common-questions"></a>
 

@@ -2,13 +2,21 @@
 
 [简体中文](README.zh-CN.md) · [English](../../README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · Français · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [繁體中文](README.zh-TW.md)
 
-**Revenez à la tâche que vous avez choisie, sans transformer chaque séance de concentration en une succession d’alertes.**
+**Transformez « il faut étudier » en une prochaine étape concrète, avec un point de reprise après une distraction.**
 
-Random Cue Focus est une application d’accompagnement Flutter privilégiant le stockage local, destinée aux personnes qui souhaitent un rappel occasionnel et facultatif de leur propre objectif sur iOS ou Windows. La version `0.2.0` remplace les « micropauses » fréquentes et obligatoires du prototype par des vérifications d’objectif espacées et que l’on peut ignorer, silencieuses et sans notification par défaut.
+Random Cue Focus est un compagnon d’étude Flutter privilégiant le stockage local, pour iOS et Windows. Définissez un objectif, écrivez une petite action de reprise et utilisez des vérifications facultatives sans arrêter le minuteur. L’historique local et l’évaluation facultative des progrès aident à réfléchir à la séance.
 
-Le produit est **éclairé par les données scientifiques, mais n’a pas été validé cliniquement**. Il aide à formuler un objectif concret, à vérifier de temps en temps si l’on continue à le poursuivre et à utiliser un plan simple de reprise « si… alors… » après une distraction. Il ne prétend ni diagnostiquer l’attention, ni augmenter la productivité, ni améliorer l’apprentissage par la seule utilisation d’un minuteur.
+Utilisez-le avec vos livres, exercices ou notes : il soutient la planification et le suivi de l’apprentissage. La version `0.2.0` propose des vérifications espacées, ignorables, silencieuses et sans notification par défaut.
 
 [Essayer une séance](#a-session-in-practice) · [Environnement de développement](#develop) · [Préparation de la version](#release-status) · [Questions fréquentes](#common-questions) · [Contribuer](#help-make-it-easier-to-use-and-verify)
+
+<a id="learning-workflow"></a>
+
+## L’utiliser pendant une séance d’étude
+
+Remplacez « étudier la biologie » par « lire la division cellulaire et écrire trois différences entre mitose et méiose ». Ajoutez « si j’ouvre un onglet sans rapport, je reviens au paragraphe suivant et j’écris une comparaison ». Lors d’une vérification facultative, retrouvez l’objectif ou continuez à lire ; ensuite, notez ce que vous avez réalisé et la gêne occasionnée.
+
+Pour les exercices, précisez les problèmes et l’étape de reprise ; pour réviser, choisissez les notions à rappeler et expliquer avec vos supports. Lire, résoudre, rappeler et vérifier vous revient. Le plan modifiable n’est pas un accompagnement automatique.
 
 <a id="when-it-may-fit"></a>
 
@@ -53,17 +61,21 @@ Les instructions de compilation et d’exécution figurent dans [Développement]
 Les réglages et événements de séance existants de la version `0.1.x` sont migrés plutôt que supprimés silencieusement. La version `6` du schéma conserve toutes les migrations antérieures, l’inscription explicite à l’étude et l’affectation par séance, tout en ajoutant, pour les nouvelles séances d’étude, un instantané de l’activation réelle des vérifications, de leur intervalle et de la fenêtre de réponse. Le schéma v2 d’export de recherche supprime l’horodatage absolu d’affectation ainsi que les identifiants bruts de séance, les dates et le texte libre. La cadence adaptative est une heuristique déterministe et vérifiable, pas un modèle d’apprentissage automatique, et attend au moins trois séances et six réponses avant de modifier un intervalle.
 
 <a id="evidence-boundary"></a>
+<a id="limites-des-données-scientifiques"></a>
 
-## Limites des données scientifiques
+## Les recherches qui orientent le parcours
 
-La conception accorde le plus de poids aux résultats directs et convergents, et explicite les inférences indirectes :
+| Recherche et expérience | Résultat | Lien et limite |
+| --- | --- | --- |
+| [Gollwitzer & Sheeran (2006)](https://doi.org/10.1016/S0065-2601(06)38002-1) | La méta-analyse des plans si–alors observe un bénéfice moyen dans des contextes variés ; les estimations récentes robustes aux biais sont plus faibles. | Appuie un plan de reprise personnel ; ne prouve pas un bénéfice des rappels aléatoires pour apprendre. |
+| [Harkin et al. (2016)](https://doi.org/10.1037/bul0000025) | 138 études randomisées, 19 951 participants : favoriser le suivi améliore en moyenne l’atteinte des objectifs. | Appuie les vérifications et la réflexion ; ne teste ni cette app ni les notes scolaires. |
+| [Stothart et al. (2015)](https://doi.org/10.1037/xhp0000100) | Les notifications perturbent une tâche d’attention même sans utiliser le téléphone. | Oriente les vérifications silencieuses et facultatives ; ne valide pas l’intervalle de 12–18 minutes. |
 
-- Les alertes peuvent perturber une tâche en cours ; les notifications externes et le son sont donc désactivés par défaut.
-- Les courtes pauses présentent des bénéfices plus constants sur la vigueur et la fatigue que sur les performances cognitives ; la vérification est donc facultative et aucune amélioration des performances n’est promise.
-- Les intentions d’implémentation formulées par l’utilisateur et l’auto-observation peuvent aider à reprendre une tâche, mais les estimations modernes robustes aux biais sont plus modestes que celles des premières méta-analyses. Cette application précise et son intervalle par défaut de 12 à 18 minutes n’ont pas été validés dans un essai randomisé du produit.
-- La pratique de récupération en mémoire et l’espacement bénéficient de preuves d’apprentissage plus solides, mais un minuteur ne constitue pas, à lui seul, une intervention de récupération en mémoire.
+**Ces expériences portent sur des méthodes et processus associés, pas sur des gains mesurés avec cette app.** Aucun essai du produit sur les apprentissages n’a été réalisé. L’intervalle est une heuristique réglable. Le croisement local compare conditions et expérience ; aucun résultat n’est rapporté. Historique et autoévaluations ne sont pas des scores d’apprentissage.
 
-Consultez la [Base scientifique](../EVIDENCE_BASE.md), le [Plan de mesure](../MEASUREMENT_PLAN.md), le [dictionnaire de données](../DATA_DICTIONARY.md), le [protocole croisé local](../LOCAL_CROSSOVER_PROTOCOL.md) et la [spécification du mode d’apprentissage expérimental](../LEARNING_MODE_SPEC.md) pour la matrice reliant affirmations et fonctionnalités, les limites, le plan d’évaluation, le contrat du schéma et la boucle minimale d’apprentissage conforme aux données scientifiques.
+Le rappel et l’espacement sont étayés, mais l’app actuelle ne propose ni questions de rappel, ni correction, ni révision programmée du contenu. Le [mode d’apprentissage](../LEARNING_MODE_SPEC.md) reste une spécification. Une future évaluation pourrait comparer rétention différée, transfert et gêne ; elle n’a pas été menée.
+
+Voir les [sources et limites](../EVIDENCE_BASE.md), le [plan de mesure](../MEASUREMENT_PLAN.md), le [dictionnaire de données](../DATA_DICTIONARY.md) et le [protocole croisé local](../LOCAL_CROSSOVER_PROTOCOL.md).
 
 <a id="common-questions"></a>
 
