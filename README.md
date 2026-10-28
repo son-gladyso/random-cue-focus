@@ -2,13 +2,21 @@
 
 [简体中文](docs/i18n/README.zh-CN.md) · English · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Español](docs/i18n/README.es.md) · [Français](docs/i18n/README.fr.md) · [Deutsch](docs/i18n/README.de.md) · [Português (Brasil)](docs/i18n/README.pt-BR.md) · [Русский](docs/i18n/README.ru.md) · [繁體中文](docs/i18n/README.zh-TW.md)
 
-**Return to the task you chose, without making every focus session a stream of alerts.**
+**Turn “I should study” into a concrete next step—and find your way back when attention drifts.**
 
-Random Cue Focus is a local-first Flutter companion for people who want an occasional, optional reminder of their own goal on iOS or Windows. Version `0.2.0` replaces the prototype's frequent, mandatory “microbreak” framing with sparse, skippable goal checks that are silent and non-notifying by default.
+Random Cue Focus is a local-first Flutter study companion for iOS and Windows. Choose what you want to learn, write a small recovery action, and work through occasional, optional goal checks without stopping the timer. Local history and optional progress ratings help you reflect on how the session went.
 
-The product is **evidence-informed, not clinically validated**. It helps a person state a concrete goal, occasionally check whether they are still pursuing it, and use a simple if–then recovery plan after distraction. It does not claim to diagnose attention, increase productivity, or improve learning from timer usage alone.
+Use it alongside your textbook, exercises, or revision notes: it supports the planning and monitoring around learning. Version `0.2.0` uses sparse, skippable checks that are silent and non-notifying by default.
 
 [Try a session](#a-session-in-practice) · [Developer setup](#develop) · [Release readiness](#release-status) · [FAQ](#common-questions) · [Contribute](#help-make-it-easier-to-use-and-verify)
+
+<a id="learning-workflow"></a>
+
+## How it supports a study session
+
+A vague goal like “study biology” is hard to return to. Make it “read the section on cell division and write three differences between mitosis and meiosis.” Add “if I open an unrelated tab, then I return to the next paragraph and write one comparison.” At an optional check, reconnect with that goal or skip the check and keep reading. Afterwards, record what you completed and whether the checks felt intrusive.
+
+For problem solving, name the next exercises and the step you will resume; for revision, choose the concepts you will explain from memory using your own materials. The app keeps the goal and your plan available; you do the reading, solving, recall, and checking. Recovery text is editable, not an automatic coaching intervention.
 
 ## When it may fit
 
@@ -46,16 +54,21 @@ Build and run instructions are in [Develop](#develop). No device recording is in
 
 Existing version `0.1.x` settings and session events are migrated rather than silently discarded. Schema version `6` retains all earlier migrations, explicit study enrollment, and per-session assignment while adding the actual goal-check enabled, interval, and response-window snapshot for new study sessions. Research export schema v2 removes the absolute assignment timestamp as well as raw session IDs, dates, and free text. The adaptive cadence is a deterministic, inspectable heuristic—not a machine-learning model—and waits for at least three sessions and six responses before changing an interval.
 
-## Evidence boundary
+<a id="evidence-boundary"></a>
 
-The design gives the most weight to direct, converging findings and makes indirect inference explicit:
+## Research behind the workflow
 
-- Alerts can disrupt an active task, so external notification and sound defaults are off.
-- Short breaks show more consistent benefits for vigor/fatigue than for cognitive performance, so a check is optional and no performance benefit is promised.
-- User-authored implementation intentions and self-monitoring are plausible recovery supports, but modern bias-robust estimates are smaller than early meta-analytic estimates, and this exact app and its 12–18-minute default have not been validated in a randomized product trial.
-- Retrieval practice and spacing have stronger learning evidence, but a timer is not a retrieval-practice intervention by itself.
+| Research and experiment | Finding | Connection and limit |
+| --- | --- | --- |
+| [Gollwitzer & Sheeran (2006)](https://doi.org/10.1016/S0065-2601(06)38002-1) | An if–then planning meta-analysis found an average goal-attainment benefit across varied settings; newer bias-robust estimates are smaller. | Supports a user-written recovery plan; does not establish that random reminders improve learning. |
+| [Harkin et al. (2016)](https://doi.org/10.1037/bul0000025) | 138 randomized studies (19,951 participants) found that interventions increasing progress monitoring improved goal attainment on average. | Supports goal checks and reflection; these were not trials of this app or of its effect on grades. |
+| [Stothart et al. (2015)](https://doi.org/10.1037/xhp0000100) | Phone notifications disrupted an attention task even without phone interaction. | Supports quiet, optional checks; does not identify an optimal 12–18-minute interval. |
 
-See [Evidence base](docs/EVIDENCE_BASE.md), [Measurement plan](docs/MEASUREMENT_PLAN.md), [data dictionary](docs/DATA_DICTIONARY.md), [local crossover protocol](docs/LOCAL_CROSSOVER_PROTOCOL.md), and [experimental learning-mode specification](docs/LEARNING_MODE_SPEC.md) for the claim-to-feature matrix, limitations, evaluation design, schema contract, and the minimum evidence-valid learning loop.
+**These are experiments on learning-related processes, not evidence of measured gains from Random Cue Focus.** No product learning-outcome trial has been performed. The default interval is an adjustable heuristic. Local crossover tools compare check conditions and experience; no results are reported. History and self-ratings are reflection aids, not learning scores.
+
+Retrieval practice and spacing are useful study methods, but the current app does not deliver recall questions, answer correction, or scheduled content review. [Learning mode](docs/LEARNING_MODE_SPEC.md) remains a specification. A future product study could compare matched study tasks with delayed retention and transfer questions, alongside interruption burden; that evaluation has not been conducted.
+
+See the [Evidence base](docs/EVIDENCE_BASE.md) for full references and claim limits, and the [Measurement plan](docs/MEASUREMENT_PLAN.md), [data dictionary](docs/DATA_DICTIONARY.md), and [local crossover protocol](docs/LOCAL_CROSSOVER_PROTOCOL.md) for the existing evaluation contracts.
 
 ## Common questions
 

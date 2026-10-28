@@ -2,13 +2,21 @@
 
 [简体中文](README.zh-CN.md) · [English](../../README.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · Deutsch · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [繁體中文](README.zh-TW.md)
 
-**Kehre zu deiner selbst gewählten Aufgabe zurück, ohne jede Konzentrationsphase in eine Folge von Meldungen zu verwandeln.**
+**Mache aus „Ich sollte lernen“ einen konkreten nächsten Schritt und finde nach Ablenkung zurück.**
 
-Random Cue Focus ist eine lokal ausgerichtete Flutter-Begleit-App für Menschen, die unter iOS oder Windows gelegentlich und freiwillig an ihr eigenes Ziel erinnert werden möchten. Version `0.2.0` ersetzt die häufigen, verpflichtenden „Mikropausen“ des Prototyps durch seltene, überspringbare Zielprüfungen, die standardmäßig lautlos sind und keine Benachrichtigungen auslösen.
+Random Cue Focus ist eine Flutter-Lernbegleitung mit lokaler Speicherung für iOS und Windows. Lege ein Lernziel und einen kleinen Rückkehrschritt fest und nutze gelegentliche freiwillige Zielprüfungen, ohne den Timer anzuhalten. Lokaler Verlauf und freiwillige Fortschrittsbewertungen helfen beim Rückblick.
 
-Das Produkt ist **durch Forschungsergebnisse informiert, aber nicht klinisch validiert**. Es hilft dabei, ein konkretes Ziel zu formulieren, gelegentlich zu prüfen, ob man es noch verfolgt, und nach einer Ablenkung einen einfachen Wenn-dann-Plan zur Rückkehr zu nutzen. Es beansprucht nicht, Aufmerksamkeit zu diagnostizieren, Produktivität zu steigern oder allein durch die Verwendung eines Timers das Lernen zu verbessern.
+Nutze die App neben Lehrbuch, Aufgaben oder Wiederholungsnotizen: Sie unterstützt Planung und Selbstbeobachtung beim Lernen. Version `0.2.0` verwendet seltene, überspringbare Prüfungen, standardmäßig lautlos und ohne Benachrichtigungen.
 
 [Eine Sitzung ausprobieren](#a-session-in-practice) · [Entwicklungsumgebung](#develop) · [Freigabereife](#release-status) · [Häufige Fragen](#common-questions) · [Mitwirken](#help-make-it-easier-to-use-and-verify)
+
+<a id="learning-workflow"></a>
+
+## So begleitet die App eine Lernsitzung
+
+Ersetze „Biologie lernen“ durch „den Abschnitt zur Zellteilung lesen und drei Unterschiede zwischen Mitose und Meiose aufschreiben“. Ergänze „Wenn ich einen fremden Tab öffne, kehre ich zum nächsten Absatz zurück und schreibe einen Vergleich“. Bei einer freiwilligen Prüfung orientierst du dich neu oder liest weiter; anschließend hältst du Fortschritt und Störbelastung fest.
+
+Für Aufgaben benennst du die nächsten Übungen und den Wiedereinstieg, zum Wiederholen die mit eigenen Materialien abzurufenden und zu erklärenden Begriffe. Lesen, Lösen, Abrufen und Prüfen übernimmst du. Der bearbeitbare Rückkehrplan ist kein automatisches Coaching.
 
 <a id="when-it-may-fit"></a>
 
@@ -53,17 +61,21 @@ Anleitungen zum Bauen und Ausführen stehen unter [Entwicklung](#develop). Eine 
 Vorhandene Einstellungen und Sitzungsereignisse der Version `0.1.x` werden migriert, statt stillschweigend verworfen zu werden. Schemaversion `6` behält alle früheren Migrationen, die ausdrückliche Studienteilnahme und die Zuteilung pro Sitzung bei. Für neue Studiensitzungen ergänzt sie eine Momentaufnahme des tatsächlichen Aktivierungsstatus der Zielprüfung, des Intervalls und des Antwortfensters. Forschungsexportschema v2 entfernt den absoluten Zuteilungszeitstempel ebenso wie rohe Sitzungs-IDs, Datumsangaben und Freitext. Die adaptive Taktung ist eine deterministische, überprüfbare Heuristik, kein Modell des maschinellen Lernens. Sie wartet mindestens drei Sitzungen und sechs Antworten ab, bevor sie ein Intervall ändert.
 
 <a id="evidence-boundary"></a>
+<a id="grenzen-der-evidenz"></a>
 
-## Grenzen der Evidenz
+## Forschung hinter dem Ablauf
 
-Die Gestaltung gewichtet direkte, übereinstimmende Befunde am stärksten und macht indirekte Schlussfolgerungen ausdrücklich kenntlich:
+| Studie und Experiment | Befund | Bezug und Grenze |
+| --- | --- | --- |
+| [Gollwitzer & Sheeran (2006)](https://doi.org/10.1016/S0065-2601(06)38002-1) | Die Metaanalyse zu Wenn-dann-Plänen fand einen mittleren Nutzen in unterschiedlichen Kontexten; neuere verzerrungsrobuste Schätzungen sind kleiner. | Stützt einen selbst verfassten Rückkehrplan; belegt keinen Lernvorteil zufälliger Erinnerungen. |
+| [Harkin et al. (2016)](https://doi.org/10.1037/bul0000025) | 138 randomisierte Studien, 19.951 Personen: Mehr Fortschrittsbeobachtung verbesserte die Zielerreichung im Mittel. | Stützt Zielprüfung und Rückblick; untersuchte weder diese App noch ihre Wirkung auf Noten. |
+| [Stothart et al. (2015)](https://doi.org/10.1037/xhp0000100) | Benachrichtigungen störten eine Aufmerksamkeitsaufgabe auch ohne Handynutzung. | Stützt stille, freiwillige Prüfungen; bestätigt kein optimales Intervall von 12–18 Minuten. |
 
-- Meldungen können eine laufende Aufgabe stören. Deshalb sind externe Benachrichtigungen und Ton standardmäßig aus.
-- Kurze Pausen zeigen konsistentere Vorteile für Vitalität und Ermüdung als für kognitive Leistung. Deshalb ist eine Prüfung freiwillig, und es wird kein Leistungsgewinn versprochen.
-- Selbst formulierte Implementierungsintentionen und Selbstbeobachtung sind plausible Hilfen zur Rückkehr. Moderne, gegenüber Verzerrungen robuste Schätzungen fallen jedoch kleiner aus als frühe metaanalytische Schätzungen. Diese konkrete App und ihr Standardintervall von 12–18 Minuten wurden nicht in einer randomisierten Produktstudie validiert.
-- Abrufübungen und verteiltes Lernen verfügen über stärkere Lernnachweise. Ein Timer allein ist jedoch keine Abrufübungsintervention.
+**Das sind Befunde zu verwandten Methoden und Prozessen, keine gemessenen Lerngewinne dieser App.** Eine Produktstudie zu Lernergebnissen wurde nicht durchgeführt. Das Intervall ist eine anpassbare Heuristik. Der lokale Crossover vergleicht Bedingungen und Erleben; Ergebnisse liegen nicht vor. Verlauf und Selbstauskunft sind keine Lernnoten.
 
-Die Zuordnung zwischen Aussagen und Funktionen, Grenzen, das Evaluationsdesign, den Schemavertrag und den minimalen evidenzgerechten Lernkreislauf findest du in [Evidenzbasis](../EVIDENCE_BASE.md), [Messplan](../MEASUREMENT_PLAN.md), [Datenwörterbuch](../DATA_DICTIONARY.md), [lokalem Crossover-Protokoll](../LOCAL_CROSSOVER_PROTOCOL.md) und [Spezifikation des experimentellen Lernmodus](../LEARNING_MODE_SPEC.md).
+Abrufübung und verteiltes Lernen sind erforscht, aber die aktuelle App bietet keine Abruffragen, Antwortkorrektur oder geplante Inhaltswiederholung. Der [Lernmodus](../LEARNING_MODE_SPEC.md) ist eine Spezifikation. Eine künftige Studie könnte verzögerte Behaltensleistung, Transfer und Störbelastung vergleichen; sie wurde noch nicht durchgeführt.
+
+Siehe [Quellen und Grenzen](../EVIDENCE_BASE.md), [Messplan](../MEASUREMENT_PLAN.md), [Datenwörterbuch](../DATA_DICTIONARY.md) und [lokales Crossover-Protokoll](../LOCAL_CROSSOVER_PROTOCOL.md).
 
 <a id="common-questions"></a>
 
