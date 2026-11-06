@@ -152,6 +152,72 @@ void main() {
     expect(controller.promptPlan, isNotEmpty);
     controller.dispose();
   });
+
+  group('checks that cannot be seen', () {
+    test('a check due during sleep is missed with no stale toast', () async {
+      final adapter = _RecordingNotificationAdapter();
+      final controller = FocusController(
+        settings: settings,
+        repository: repository,
+        notificationAdapter: adapter,
+      );
+      await controller.startFocus();
+
+      controller.tickAtForTesting(
+        DateTime.now().add(const Duration(seconds: 400)),
+      );
+
+      expect(controller.events.map((event) => event.type), [
+        PromptResponseType.missed,
+      ]);
+      expect(controller.events.single.plannedOffsetSeconds, 300);
+      expect(controller.phase, SessionPhase.focusing);
+      expect(controller.focusElapsed, inInclusiveRange(400, 401));
+      expect(adapter.promptsShown, 0);
+      controller.dispose();
+    });
+
+    test('a tick gap within tolerance is still live', () async {
+      final adapter = _RecordingNotificationAdapter();
+      final controller = FocusController(
+        settings: settings,
+        repository: repository,
+        notificationAdapter: adapter,
+      );
+      await controller.startFocus();
+      controller.advanceForTesting(298);
+
+      controller.tickAtForTesting(
+        DateTime.now().add(const Duration(seconds: maxLiveTickGapSeconds)),
+      );
+
+      expect(controller.events.single.type, PromptResponseType.shown);
+      expect(controller.phase, SessionPhase.microBreak);
+      expect(adapter.promptsShown, 1);
+      controller.dispose();
+    });
+
+    test('a saved session with a missed check passes validation', () async {
+      final controller = _controller(settings, repository);
+      await controller.startFocus();
+      controller.tickAtForTesting(
+        DateTime.now().add(const Duration(seconds: 400)),
+      );
+      controller.advanceForTesting(660 - controller.focusElapsed);
+      expect(controller.phase, SessionPhase.completed);
+      await controller.recordMeaningfulProgress(MeaningfulProgressResponse.yes);
+
+      final saved = (await repository.loadSessions()).single;
+      expect(saved.promptEvents.map((event) => event.type), [
+        PromptResponseType.missed,
+      ]);
+      final report = validateMeasurementData([
+        saved,
+      ], now: DateTime.now().add(const Duration(days: 1)));
+      expect(report.issues, isEmpty);
+      controller.dispose();
+    });
+  });
 }
 
 FocusController _controller(
@@ -171,4 +237,13 @@ class _NoopNotificationAdapter extends NotificationAdapter {
 
   @override
   Future<void> showSessionComplete() async {}
+}
+
+class _RecordingNotificationAdapter extends _NoopNotificationAdapter {
+  var promptsShown = 0;
+
+  @override
+  Future<void> showPrompt({required FocusSettings settings}) async {
+    promptsShown += 1;
+  }
 }

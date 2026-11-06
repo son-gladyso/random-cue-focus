@@ -65,50 +65,82 @@ List<PromptCue> buildPromptPlan(
   return List.unmodifiable(cues);
 }
 
+/// Minimum number of resolved (displayed) checks before cadence may change.
+const minResolvedChecksForCadence = 6;
+
+/// Share of resolved checks left unanswered at which cadence is lengthened.
+const unansweredBurdenThreshold = 0.35;
+
+/// Chooses a cadence factor from how recently displayed checks were resolved.
+///
+/// Every displayed check resolves exactly once: an explicit answer
+/// (`onTask`, `offTask`, `acknowledged`) or a non-answer (`skipped`,
+/// `delayed`, or a timeout `ended`). Non-answers are burden signals, so a
+/// person who lets checks expire gets fewer checks, never more.
+///
+/// `missed` checks were never displayed and carry no burden or attention
+/// information, so they are ignored. Legacy `ended` events without a prompt
+/// ID come from the 0.1 mandatory microbreak, which ended on its own; they are
+/// not timeouts and are ignored too.
 CadenceDecision cadenceDecisionFromHistory(List<FocusSession> sessions) {
   final recent = sessions.reversed.take(7).toList(growable: false);
-  final responses = recent
+  final resolved = recent
       .expand((session) => session.promptEvents)
-      .where(
-        (event) =>
-            event.type == PromptResponseType.onTask ||
-            event.type == PromptResponseType.offTask ||
-            event.type == PromptResponseType.acknowledged ||
-            event.type == PromptResponseType.skipped,
-      )
+      .where(_resolvesDisplayedCheck)
       .toList(growable: false);
 
-  if (recent.length < 3 || responses.length < 6) {
+  if (recent.length < 3 || resolved.length < minResolvedChecksForCadence) {
     return const CadenceDecision(factor: 1, reason: 'insufficient_history');
   }
 
-  final skipped = responses
-      .where((event) => event.type == PromptResponseType.skipped)
+  final unanswered = resolved
+      .where(
+        (event) =>
+            event.type == PromptResponseType.skipped ||
+            event.type == PromptResponseType.delayed ||
+            event.type == PromptResponseType.ended,
+      )
       .length;
-  final onTask = responses
+  final onTask = resolved
       .where(
         (event) =>
             event.type == PromptResponseType.onTask ||
             event.type == PromptResponseType.acknowledged,
       )
       .length;
-  final offTask = responses
+  final offTask = resolved
       .where((event) => event.type == PromptResponseType.offTask)
       .length;
 
-  if (skipped / responses.length >= 0.35) {
+  if (unanswered / resolved.length >= unansweredBurdenThreshold) {
     return const CadenceDecision(factor: 1.25, reason: 'reduce_cue_burden');
   }
-  if (onTask / responses.length >= 0.8) {
+  if (onTask / resolved.length >= 0.8) {
     return const CadenceDecision(factor: 1.12, reason: 'mostly_on_task');
   }
-  if (offTask / responses.length >= 0.5) {
+  if (offTask / resolved.length >= 0.5) {
     return const CadenceDecision(
       factor: 1,
       reason: 'off_task_does_not_increase_cue_burden',
     );
   }
   return const CadenceDecision(factor: 1, reason: 'stable_cadence');
+}
+
+bool _resolvesDisplayedCheck(PromptEvent event) {
+  switch (event.type) {
+    case PromptResponseType.onTask:
+    case PromptResponseType.offTask:
+    case PromptResponseType.acknowledged:
+    case PromptResponseType.skipped:
+    case PromptResponseType.delayed:
+      return true;
+    case PromptResponseType.ended:
+      return event.promptId.isNotEmpty;
+    case PromptResponseType.shown:
+    case PromptResponseType.missed:
+      return false;
+  }
 }
 
 double cadenceFactorFromHistory(List<FocusSession> sessions) {

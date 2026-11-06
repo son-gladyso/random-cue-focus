@@ -16,6 +16,7 @@ class StudyConditionMetrics {
     required this.shownChecks,
     required this.answeredChecks,
     required this.skippedOrDelayedChecks,
+    this.missedChecks = 0,
   });
 
   final StudyCondition condition;
@@ -30,6 +31,10 @@ class StudyConditionMetrics {
   final int shownChecks;
   final int answeredChecks;
   final int skippedOrDelayedChecks;
+
+  /// Planned checks that came due while the in-app card could not be seen.
+  /// Not exposure; reported so planned-versus-shown gaps are explained.
+  final int missedChecks;
 
   double? get completionRate => _ratio(completedSessions, assignedSessions);
   double? get exposureRate => _ratio(exposedSessions, assignedSessions);
@@ -55,6 +60,7 @@ class StudyConditionMetrics {
       'shownChecks': shownChecks,
       'answeredChecks': answeredChecks,
       'skippedOrDelayedChecks': skippedOrDelayedChecks,
+      'missedChecks': missedChecks,
       'completionRate': completionRate,
       'exposureRate': exposureRate,
       'meaningfulProgressResponseCoverage': meaningfulProgressResponseCoverage,
@@ -206,6 +212,7 @@ StudyConditionMetrics _conditionMetrics(
   var shownChecks = 0;
   var answeredChecks = 0;
   var skippedOrDelayedChecks = 0;
+  var missedChecks = 0;
 
   for (final session in eligible) {
     if (session.completed) completedSessions += 1;
@@ -229,6 +236,9 @@ StudyConditionMetrics _conditionMetrics(
               event.type == PromptResponseType.skipped ||
               event.type == PromptResponseType.delayed,
         )
+        .length;
+    missedChecks += session.promptEvents
+        .where((event) => event.type == PromptResponseType.missed)
         .length;
 
     final outcome = session.outcomeReport;
@@ -257,6 +267,7 @@ StudyConditionMetrics _conditionMetrics(
     shownChecks: shownChecks,
     answeredChecks: answeredChecks,
     skippedOrDelayedChecks: skippedOrDelayedChecks,
+    missedChecks: missedChecks,
   );
 }
 

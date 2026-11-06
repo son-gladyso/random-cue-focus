@@ -13,6 +13,12 @@
 - Expanded structural gates for settings snapshots, event chronology, planned exposure, outcome timing, and alternating contiguous assignments.
 - Documented completion-dependent outcome missingness and prohibited complete-case differences from being described as causal effects.
 
+### Fixed
+
+- Seconds replayed after the iOS app returned from the background, or after either app's timer was suspended (sleep), no longer log checks the user never saw as `shown` + `ended`. They are now recorded as a new `missed` event that is not exposure, and no stale sound or Windows toast is played. iOS now observes the app lifecycle.
+- Adaptive cadence now counts timeouts (`ended`) and Windows “ask later” (`delayed`) as unanswered burden alongside skips, and counts them toward the six-check minimum. Previously the most common outcome under silent defaults, a timeout, was invisible to the burden rule, so it could never lengthen cadence. Missed checks and legacy 0.1 microbreak ends are ignored.
+- The structural validator, local outcome summary (`cuesMissed`), and study profile (`missedChecks`) understand `missed` prompts. Architecture documentation now states schema v6.
+
 ### Changed
 
 - Reframed mandatory microbreaks as sparse, skippable goal checks.

@@ -8,6 +8,11 @@ import 'models.dart';
 import 'notification_service.dart';
 import 'stores.dart';
 
+/// A wall-clock gap between ticks longer than this means the timer was
+/// suspended (app in the background, device asleep). Seconds replayed to catch
+/// up after such a gap were never on screen.
+const maxLiveTickGapSeconds = 3;
+
 class FocusEngine extends ChangeNotifier {
   FocusEngine({
     required FocusSettings settings,
@@ -42,6 +47,7 @@ class FocusEngine extends ChangeNotifier {
   SessionOutcomeReport? _outcomeReport;
   List<PromptCue> _promptPlan = const [];
   final List<PromptEvent> _events = [];
+  bool _appInForeground = true;
 
   FocusSettings get settings => _settings;
   SessionPhase get phase => _phase;
@@ -53,6 +59,21 @@ class FocusEngine extends ChangeNotifier {
   SessionOutcomeReport? get outcomeReport => _outcomeReport;
   StudySessionAssignment? get activeStudyAssignment =>
       _measurementContext.studyAssignment;
+
+  bool get appInForeground => _appInForeground;
+
+  /// Tells the engine whether the in-app goal-check card can be seen.
+  ///
+  /// The app shell calls this from its lifecycle observer. Time already spent
+  /// in the outgoing state is settled first, so seconds that passed while the
+  /// app was in the background are replayed as unseen: checks that came due
+  /// then are recorded as `missed`, never as `shown` + `ended`.
+  void setAppInForeground(bool inForeground) {
+    if (_appInForeground == inForeground) return;
+    _tick();
+    _appInForeground = inForeground;
+    notifyListeners();
+  }
 
   bool get isActive =>
       _phase == SessionPhase.focusing ||
@@ -308,23 +329,25 @@ class FocusEngine extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
-  void _tick() {
-    final now = DateTime.now();
+  void _tick([DateTime? at]) {
+    final now = at ?? DateTime.now();
     final previous = _lastTick ?? now;
     final deltaSeconds = now.difference(previous).inSeconds;
     if (deltaSeconds <= 0) return;
     _lastTick = now;
+    final promptsVisible =
+        _appInForeground && deltaSeconds <= maxLiveTickGapSeconds;
     for (var i = 0; i < deltaSeconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: promptsVisible);
     }
     notifyListeners();
   }
 
-  void _advanceOneSecond() {
+  void _advanceOneSecond({required bool promptsVisible}) {
     switch (_phase) {
       case SessionPhase.focusing:
         _focusElapsed += 1;
-        _maybeStartMicroBreak();
+        _maybeStartMicroBreak(visible: promptsVisible);
         if (_focusElapsed >= _settings.focusDurationSeconds) {
           _completeFocus();
         }
@@ -369,24 +392,45 @@ class FocusEngine extends ChangeNotifier {
     }
   }
 
+  /// Advances live (foreground) seconds one by one, as the ticker would.
   @visibleForTesting
   void advanceForTesting(int seconds) {
     assert(seconds >= 0);
     _ticker?.cancel();
     for (var i = 0; i < seconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: _appInForeground);
     }
     _ticker?.cancel();
     notifyListeners();
   }
 
-  void _maybeStartMicroBreak() {
+  /// Runs one ticker callback as if the wall clock now read [now].
+  @visibleForTesting
+  void tickAtForTesting(DateTime now) {
+    _ticker?.cancel();
+    _tick(now);
+    _ticker?.cancel();
+  }
+
+  void _maybeStartMicroBreak({required bool visible}) {
     if (_nextPromptIndex >= _promptPlan.length) return;
     final nextCue = _promptPlan[_nextPromptIndex];
     if (_focusElapsed < nextCue.offsetSeconds) return;
 
     final promptId = '${_activeSessionId ?? 'session'}:$_nextPromptIndex';
     _nextPromptIndex += 1;
+    if (!visible) {
+      _events.add(
+        PromptEvent(
+          elapsedSeconds: _focusElapsed,
+          occurredAt: DateTime.now(),
+          type: PromptResponseType.missed,
+          promptId: promptId,
+          plannedOffsetSeconds: nextCue.offsetSeconds,
+        ),
+      );
+      return;
+    }
     _microBreakRemaining = _settings.microBreakSeconds;
     _phase = SessionPhase.microBreak;
     _activePromptId = promptId;

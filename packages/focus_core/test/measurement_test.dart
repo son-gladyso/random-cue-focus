@@ -253,6 +253,95 @@ void main() {
       expect(report.isAnalysisReady, isFalse);
     },
   );
+
+  group('missed checks', () {
+    final started = DateTime.utc(2026, 8, 27, 8);
+
+    FocusSession withPlan(List<PromptEvent> events) {
+      return FocusSession(
+        id: 'missed',
+        startedAt: started,
+        endedAt: started.add(const Duration(minutes: 20)),
+        plannedFocusSeconds: 1200,
+        focusSeconds: 1200,
+        restSeconds: 0,
+        completed: true,
+        modeName: 'test',
+        measurementContext: const MeasurementContext(
+          plannedPromptOffsets: [300, 900],
+        ),
+        promptEvents: events,
+      );
+    }
+
+    PromptEvent event(
+      PromptResponseType type, {
+      required String id,
+      required int offset,
+      int at = 0,
+    }) {
+      return PromptEvent(
+        promptId: id,
+        plannedOffsetSeconds:
+            type == PromptResponseType.shown ||
+                type == PromptResponseType.missed
+            ? offset
+            : null,
+        responseLatencySeconds:
+            type == PromptResponseType.shown ||
+                type == PromptResponseType.missed
+            ? null
+            : at - offset,
+        elapsedSeconds: at == 0 ? offset : at,
+        occurredAt: started.add(Duration(seconds: at == 0 ? offset : at)),
+        type: type,
+      );
+    }
+
+    test('a missed check accounts for its planned offset', () {
+      final report = validateMeasurementData([
+        withPlan([
+          event(PromptResponseType.missed, id: 'p0', offset: 300),
+          event(PromptResponseType.shown, id: 'p1', offset: 900),
+          event(PromptResponseType.onTask, id: 'p1', offset: 900, at: 904),
+        ]),
+      ], now: DateTime.utc(2026, 8, 28));
+
+      expect(report.issues, isEmpty);
+      expect(report.isAnalysisReady, isTrue);
+    });
+
+    test('a missed check cannot also be shown or answered', () {
+      final report = validateMeasurementData([
+        withPlan([
+          event(PromptResponseType.missed, id: 'p0', offset: 300),
+          event(PromptResponseType.onTask, id: 'p0', offset: 300, at: 302),
+          event(PromptResponseType.missed, id: 'p1', offset: 900),
+        ]),
+      ], now: DateTime.utc(2026, 8, 28));
+
+      expect(
+        report.issues.map((issue) => issue.code),
+        contains('invalid_missed_prompt_record'),
+      );
+      expect(report.isAnalysisReady, isFalse);
+    });
+
+    test('one offset cannot be both missed and shown', () {
+      final report = validateMeasurementData([
+        withPlan([
+          event(PromptResponseType.missed, id: 'p0', offset: 300),
+          event(PromptResponseType.shown, id: 'p0-again', offset: 300),
+          event(PromptResponseType.missed, id: 'p1', offset: 900),
+        ]),
+      ], now: DateTime.utc(2026, 8, 28));
+
+      expect(
+        report.issues.map((issue) => issue.code),
+        contains('duplicate_prompt_exposure_offset'),
+      );
+    });
+  });
 }
 
 FocusSession _session({

@@ -27,7 +27,7 @@ flowchart LR
 
 ## Data compatibility
 
-Schema version `5` retains schema-4 algorithm/settings snapshots, planned prompt offsets, prompt correlation IDs, response latency, and optional post-session outcomes while adding explicit study enrollment and per-session assignment. It preserves earlier fields, legacy platform notification keys, and typed migration of old `microbreak_start`/`microbreak_end` strings. Fresh defaults change, but stored user choices are normalized and retained.
+Schema version `6` retains schema-4 algorithm/settings snapshots, planned prompt offsets, prompt correlation IDs, response latency, optional post-session outcomes, and schema-5 explicit study enrollment and per-session assignment, while adding per-session goal-check enabled, interval, and response-window snapshots. The `missed` prompt event type is additive and needs no migration. It preserves earlier fields, legacy platform notification keys, and typed migration of old `microbreak_start`/`microbreak_end` strings. Fresh defaults change, but stored user choices are normalized and retained.
 
 ## Failure policy
 
@@ -36,4 +36,5 @@ Schema version `5` retains schema-4 algorithm/settings snapshots, planned prompt
 - Optional notification/tray adapter failures must not stop the timer.
 - Windows JSON writes use a same-directory temporary file, flush, backup/replace, restoration on failure, and cleanup. Reads fall back to a valid backup and skip individually corrupt session entries.
 - Planner output is bounded, deterministic under a seed, and limited to eight checks per session.
+- A check is recorded as `shown` only when its card can be seen. Seconds replayed after the iOS app was backgrounded, or after any tick gap above 3 seconds (sleep, suspension), mark due checks `missed` and trigger no sound or notification.
 - An active study assignment is persisted before planning/exposure. Persistence failure aborts session start; control-arm exposure, post-start assignment, and duplicate assignments are critical measurement errors.

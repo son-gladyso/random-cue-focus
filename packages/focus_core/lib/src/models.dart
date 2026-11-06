@@ -17,6 +17,12 @@ enum PromptResponseType {
   skipped,
   delayed,
   ended,
+
+  /// A planned check came due while its in-app card could not be seen (app in
+  /// the background, device asleep, or the timer catching up after a
+  /// suspension). It is neither an exposure nor a response. An OS notification
+  /// may still have been delivered, but delivery is never inferred from this.
+  missed,
 }
 
 enum AppPlatform { ios, windows, unknown }

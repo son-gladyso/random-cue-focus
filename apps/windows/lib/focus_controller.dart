@@ -7,6 +7,11 @@ import 'models.dart';
 import 'notification_adapter.dart';
 import 'repositories.dart';
 
+/// A wall-clock gap between ticks longer than this means the timer was
+/// suspended (for example, the PC slept). Seconds replayed to catch up after
+/// such a gap were never on screen.
+const maxLiveTickGapSeconds = 3;
+
 class FocusController extends ChangeNotifier {
   FocusController({
     required FocusSettings settings,
@@ -315,23 +320,26 @@ class FocusController extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
-  void _tick() {
-    final now = DateTime.now();
+  void _tick([DateTime? at]) {
+    final now = at ?? DateTime.now();
     final previous = _lastTick ?? now;
     final deltaSeconds = now.difference(previous).inSeconds;
     if (deltaSeconds <= 0) return;
     _lastTick = now;
+    // After a suspension (sleep/hibernate), replayed seconds were never on
+    // screen: checks that came due then are `missed`, not `shown` + `ended`.
+    final promptsVisible = deltaSeconds <= maxLiveTickGapSeconds;
     for (var i = 0; i < deltaSeconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: promptsVisible);
     }
     notifyListeners();
   }
 
-  void _advanceOneSecond() {
+  void _advanceOneSecond({required bool promptsVisible}) {
     switch (_phase) {
       case SessionPhase.focusing:
         _focusElapsed += 1;
-        _maybeStartMicroBreak();
+        _maybeStartMicroBreak(visible: promptsVisible);
         if (_focusElapsed >= _settings.focusDurationSeconds) {
           _completeFocus();
         }
@@ -375,24 +383,46 @@ class FocusController extends ChangeNotifier {
     }
   }
 
+  /// Advances live (on-screen) seconds one by one, as the ticker would.
   @visibleForTesting
   void advanceForTesting(int seconds) {
     assert(seconds >= 0);
     _ticker?.cancel();
     for (var i = 0; i < seconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: true);
     }
     _ticker?.cancel();
     notifyListeners();
   }
 
-  void _maybeStartMicroBreak() {
+  /// Runs one ticker callback as if the wall clock now read [now].
+  @visibleForTesting
+  void tickAtForTesting(DateTime now) {
+    _ticker?.cancel();
+    _tick(now);
+    _ticker?.cancel();
+  }
+
+  void _maybeStartMicroBreak({required bool visible}) {
     if (_nextPromptIndex >= _promptPlan.length) return;
     final nextCue = _promptPlan[_nextPromptIndex];
     if (_focusElapsed < nextCue.offsetSeconds) return;
 
     final promptId = '${_activeSessionId ?? 'session'}:$_nextPromptIndex';
     _nextPromptIndex += 1;
+    if (!visible) {
+      // No card, sound, or toast: a stale alert after waking would be noise.
+      _events.add(
+        PromptEvent(
+          elapsedSeconds: _focusElapsed,
+          occurredAt: DateTime.now(),
+          type: PromptResponseType.missed,
+          promptId: promptId,
+          plannedOffsetSeconds: nextCue.offsetSeconds,
+        ),
+      );
+      return;
+    }
     _microBreakRemaining = _settings.microBreakSeconds;
     _phase = SessionPhase.microBreak;
     _activePromptId = promptId;

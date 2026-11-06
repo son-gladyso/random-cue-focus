@@ -5,6 +5,7 @@ class LocalOutcomeSummary {
     required this.sessionCount,
     required this.completedSessionCount,
     required this.cuesShown,
+    this.cuesMissed = 0,
     required this.onTaskResponses,
     required this.offTaskResponses,
     required this.skippedResponses,
@@ -18,6 +19,10 @@ class LocalOutcomeSummary {
   final int sessionCount;
   final int completedSessionCount;
   final int cuesShown;
+
+  /// Planned checks that came due while the in-app card could not be seen.
+  /// They are excluded from [cuesShown] and every response-rate denominator.
+  final int cuesMissed;
   final int onTaskResponses;
   final int offTaskResponses;
   final int skippedResponses;
@@ -60,6 +65,7 @@ class LocalOutcomeSummary {
 LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
   var completed = 0;
   var shown = 0;
+  var missed = 0;
   var onTask = 0;
   var offTask = 0;
   var skipped = 0;
@@ -101,6 +107,9 @@ LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
         case PromptResponseType.skipped:
           skipped += 1;
           break;
+        case PromptResponseType.missed:
+          missed += 1;
+          break;
         case PromptResponseType.delayed:
         case PromptResponseType.ended:
           break;
@@ -112,6 +121,7 @@ LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
     sessionCount: sessions.length,
     completedSessionCount: completed,
     cuesShown: shown,
+    cuesMissed: missed,
     onTaskResponses: onTask,
     offTaskResponses: offTask,
     skippedResponses: skipped,

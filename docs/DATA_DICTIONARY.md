@@ -40,9 +40,10 @@ Schema `v6` is local-first. It retains v5 enrollment and assignment fields and a
 ### Prompt events
 
 - `promptId` correlates one `shown` event with at most one explicit answer and an optional timeout/end transition.
-- `plannedOffsetSeconds` belongs on the `shown` event and distinguishes the plan from actual elapsed exposure.
+- `missed` replaces `shown` when a planned check comes due while its in-app card cannot be seen: the iOS app is in the background, or either app is replaying seconds after a suspension such as sleep (a tick gap above 3 seconds). A missed prompt is a single event with no exposure, answer, or timeout, and it is never counted as exposure or in a response-rate denominator. OS notification delivery, if enabled, is not inferred from it. A check already on screen when the app leaves the foreground still ends with a real `ended` timeout.
+- `plannedOffsetSeconds` belongs on the `shown` or `missed` event and distinguishes the plan from actual elapsed exposure. Every planned offset is resolved at most once, by either `shown` or `missed`.
 - `responseLatencySeconds` is derived from focus elapsed time so a wall-clock adjustment does not create a negative response interval.
-- `onTask` and `offTask` are momentary self-reports. `skipped`, `delayed`, and `ended` are burden/nonresponse signals, not failure labels.
+- `onTask` and `offTask` are momentary self-reports. `skipped`, `delayed`, and `ended` are burden/nonresponse signals, not failure labels. Adaptive cadence counts all three as unanswered; legacy `ended` rows without a `promptId` (the 0.1 microbreak finishing on its own) are excluded.
 
 ### Post-session outcomes
 
