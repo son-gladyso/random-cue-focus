@@ -36,6 +36,7 @@ class FocusEngine extends ChangeNotifier {
   int _microBreakRemaining = 0;
   int _nextPromptIndex = 0;
   Future<void>? _sessionSaveFuture;
+  bool _stopping = false;
   String? _activePromptId;
   int? _activePromptStartedElapsed;
   MeasurementContext _measurementContext = const MeasurementContext();
@@ -107,24 +108,24 @@ class FocusEngine extends ChangeNotifier {
     final previous = _settings;
     _settings = settings.normalized();
     await _settingsStore.save(_settings);
-    if (_activeSessionId != null &&
+    if (!_stopping &&
         previous.lockScreenNotifications != _settings.lockScreenNotifications) {
-      if (_settings.lockScreenNotifications) {
-        await _notificationService.scheduleFocusFallback(
-          sessionId: _activeSessionId!,
-          settings: _settings,
-          cues: _promptPlan,
-          elapsedSeconds: _focusElapsed,
-        );
-      } else {
-        await _notificationService.cancelScheduled();
+      final sessionId = _activeSessionId;
+      if (!_settings.lockScreenNotifications) {
+        await _runNotificationOperation(_notificationService.cancelScheduled());
+      } else if (sessionId != null &&
+          (_phase == SessionPhase.focusing ||
+              _phase == SessionPhase.microBreak)) {
+        await _scheduleNotifications(sessionId);
       }
     }
     notifyListeners();
   }
 
   Future<void> startFocus() async {
-    if (_phase == SessionPhase.focusing || _phase == SessionPhase.microBreak) {
+    if (_stopping ||
+        _phase == SessionPhase.focusing ||
+        _phase == SessionPhase.microBreak) {
       return;
     }
     if (_phase == SessionPhase.paused) {
@@ -190,55 +191,71 @@ class FocusEngine extends ChangeNotifier {
     _phase = SessionPhase.focusing;
     _lastTick = DateTime.now();
 
-    try {
-      await _notificationService.scheduleFocusFallback(
-        sessionId: sessionId,
-        settings: _settings,
-        cues: _promptPlan,
-        elapsedSeconds: _focusElapsed,
-      );
-    } catch (error) {
-      debugPrint('Notification scheduling failed; timer continues: $error');
-    }
+    final notifications = _scheduleNotifications(sessionId);
     _startTicker();
     notifyListeners();
+    await notifications;
   }
 
   void pause() {
-    if (_phase != SessionPhase.focusing && _phase != SessionPhase.microBreak) {
+    if (_stopping ||
+        (_phase != SessionPhase.focusing &&
+            _phase != SessionPhase.microBreak)) {
       return;
     }
     _phaseBeforePause = _phase;
     _phase = SessionPhase.paused;
     _ticker?.cancel();
-    unawaited(_notificationService.cancelScheduled());
+    unawaited(
+      _runNotificationOperation(_notificationService.cancelScheduled()),
+    );
     notifyListeners();
   }
 
   Future<void> resume() async {
-    if (_phase != SessionPhase.paused) return;
+    if (_stopping || _phase != SessionPhase.paused) return;
     _phase = _phaseBeforePause ?? SessionPhase.focusing;
     _phaseBeforePause = null;
     _lastTick = DateTime.now();
     _startTicker();
     final sessionId = _activeSessionId;
-    if (sessionId != null) {
-      await _notificationService.scheduleFocusFallback(
-        sessionId: sessionId,
-        settings: _settings,
-        cues: _promptPlan,
-        elapsedSeconds: _focusElapsed,
-      );
+    final notifications = sessionId == null
+        ? null
+        : _scheduleNotifications(sessionId);
+    notifyListeners();
+    await notifications;
+  }
+
+  Future<void> stop() async {
+    if (_stopping) return;
+    _stopping = true;
+    _ticker?.cancel();
+    try {
+      await _runNotificationOperation(_notificationService.cancelScheduled());
+      await _finalizeSession(completed: false);
+      _reset();
+    } finally {
+      _stopping = false;
     }
     notifyListeners();
   }
 
-  Future<void> stop() async {
-    _ticker?.cancel();
-    await _notificationService.cancelScheduled();
-    await _finalizeSession(completed: false);
-    _reset();
-    notifyListeners();
+  Future<void> _scheduleNotifications(String sessionId) =>
+      _runNotificationOperation(
+        _notificationService.scheduleFocusFallback(
+          sessionId: sessionId,
+          settings: _settings,
+          cues: _promptPlan,
+          elapsedSeconds: _focusElapsed,
+        ),
+      );
+
+  Future<void> _runNotificationOperation(Future<void> operation) async {
+    try {
+      await operation;
+    } catch (error) {
+      debugPrint('Focus notification operation failed: $error');
+    }
   }
 
   void recordOnTask() {
@@ -407,7 +424,9 @@ class FocusEngine extends ChangeNotifier {
     _ticker?.cancel();
     _phase = SessionPhase.resting;
     _restElapsed = 0;
-    unawaited(_notificationService.cancelScheduled());
+    unawaited(
+      _runNotificationOperation(_notificationService.cancelScheduled()),
+    );
     unawaited(_playCue());
     _lastTick = DateTime.now();
     _startTicker();
