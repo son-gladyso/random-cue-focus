@@ -43,6 +43,7 @@ Las instrucciones de compilación y ejecución están en [Desarrollo](#develop).
 - Aplicaciones iOS y Windows con estados de concentración/pausa/descanso/finalización, comprobaciones del objetivo, historial local y adaptadores de plataforma.
 - Valores predeterminados de una instalación nueva: 50 minutos de concentración, 10 de descanso, intervalo de comprobación de 12–18 minutos, ventana de respuesta de 20 segundos, notificaciones desactivadas y sonido en primer plano desactivado.
 - Respuestas explícitas: «sigo con el objetivo», «acabo de distraerme» u «omitir»; el tiempo de concentración sigue avanzando durante la comprobación.
+- Con las notificaciones activadas, las notificaciones de iOS y de Windows muestran los botones «sigo con el objetivo» y «acabo de distraerme». La respuesta se registra en la misma comprobación (marcada como respondida desde una notificación), cuenta la primera respuesta y descartar la notificación equivale a no responder.
 - Las comprobaciones no esenciales pueden desactivarse para toda una sesión; los informes de distracción nunca hacen que la heurística aumente la frecuencia de las interrupciones.
 - El objetivo, el desencadenante de la distracción y la siguiente acción de recuperación son editables por el usuario, no un guion universal.
 - Almacenamiento exclusivamente local, sin cuenta, servidor, clave de API, SDK publicitario ni analítica remota.

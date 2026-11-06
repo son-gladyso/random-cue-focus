@@ -40,9 +40,11 @@ Schema `v6` is local-first. It retains v5 enrollment and assignment fields and a
 ### Prompt events
 
 - `promptId` correlates one `shown` event with at most one explicit answer and an optional timeout/end transition.
-- `missed` replaces `shown` when a planned check comes due while its in-app card cannot be seen: the iOS app is in the background, or either app is replaying seconds after a suspension such as sleep (a tick gap above 3 seconds). A missed prompt is a single event with no exposure, answer, or timeout, and it is never counted as exposure or in a response-rate denominator. OS notification delivery, if enabled, is not inferred from it. A check already on screen when the app leaves the foreground still ends with a real `ended` timeout.
+- `missed` replaces `shown` when a planned check comes due while its in-app card cannot be seen: the iOS app is in the background, or either app is replaying seconds after a suspension such as sleep (a tick gap above 3 seconds). A missed prompt has no in-app exposure, in-app answer, or timeout; at most one answer from the notification may follow it. Unanswered, it is never counted as exposure or in a response-rate denominator; answered from the notification, it counts as a reached check. OS notification delivery, if enabled, is not inferred from it. A check already on screen when the app leaves the foreground still ends with a real `ended` timeout.
 - `plannedOffsetSeconds` belongs on the `shown` or `missed` event and distinguishes the plan from actual elapsed exposure. Every planned offset is resolved at most once, by either `shown` or `missed`.
 - `responseLatencySeconds` is derived from focus elapsed time so a wall-clock adjustment does not create a negative response interval.
+- `channel` is `inApp` (the goal-check card; also the value for rows stored before the field existed) or `notification` (an action button on an iOS notification or Windows toast). Only `onTask`/`offTask` can come from a notification, and pressing one proves the notification was seen. A notification answer may resolve the check on screen, a `missed` check, or a check that already `ended`; latency is counted from its `shown` or `missed` event, so for a missed check it is time since the check came due, not time since the notification was seen. Each check accepts one explicit answer: the first wins.
+- Reached checks = `shown` checks + `missed` checks answered from the notification. Check response rate uses reached checks as its denominator.
 - `onTask` and `offTask` are momentary self-reports. `skipped`, `delayed`, and `ended` are burden/nonresponse signals, not failure labels. Adaptive cadence counts all three as unanswered; legacy `ended` rows without a `promptId` (the 0.1 microbreak finishing on its own) are excluded.
 
 ### Post-session outcomes
@@ -58,7 +60,7 @@ Schema `v6` is local-first. It retains v5 enrollment and assignment fields and a
 | User-valued session rate | Explicit `meaningfulProgress=yes` | Sessions with any explicit yes/no/unsure answer | Exclude unanswered; always report coverage by condition and completion status | Primary outcome candidate |
 | Goal-return rate | Off-task answer followed by on-task at the next answered check in the same session | Off-task answers with a later answered check | Do not treat timeout/stop as return | Primary outcome candidate |
 | High-burden rate | Burden rating `3–4` | Sessions with an explicit burden rating | Exclude unanswered; report offered anchors | Guardrail |
-| Check response rate | On-task + off-task + acknowledged | In-app `shown` events eligible for response | Report skipped/delayed/timeout separately | Driver |
+| Check response rate | On-task + off-task + acknowledged, in the app or from a notification | Reached checks: in-app `shown` events plus `missed` checks answered from the notification | Report skipped/delayed/timeout separately | Driver |
 | Timer completion rate | Sessions reaching planned end | Started sessions with positive elapsed time | Never label as focus or learning success | Behavioral fact |
 
 Every report must include schema/app/algorithm versions, eligible population, local timezone rule, observation window, response coverage, exclusions, and the number of users as well as sessions. Session-level rows are not independent observations when one user contributes several sessions.

@@ -55,7 +55,8 @@ the last signing step is the part that must happen in Xcode.
 ## iOS notes
 
 - Foreground sound/haptics are opt-in and off on a fresh install.
-- Background and lock-screen prompts use local notifications.
+- Background and lock-screen prompts use local notifications. Their “仍在目标” / “刚刚走神”
+  buttons open the app and record the answer on the same check; dismissing means no answer.
 - iOS does not allow arbitrary precise timers to keep running forever in the
   background, so this app pre-schedules the prompt plan for the current session.
 - Notification permission is requested only when a focus session starts and

@@ -14,7 +14,7 @@ Evaluate whether sparse goal checks help users return to a chosen task without c
 
 ### Driver metrics
 
-- Check response rate = on-task + off-task + acknowledged responses / checks shown.
+- Check response rate = on-task + off-task + acknowledged responses (in the app or from a notification) / reached checks (shown in the app, or missed in the app and answered from the notification). Report notification answers separately by `channel`; they are given at a different moment and may not be comparable with in-app answers.
 - Off-task self-report share = off-task responses / answered checks.
 - Planned-session completion rate and timer minutes, labeled only as behavior.
 - Recovery-plan presence and goal presence at session start.

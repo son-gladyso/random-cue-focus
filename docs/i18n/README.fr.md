@@ -43,6 +43,7 @@ Les instructions de compilation et d’exécution figurent dans [Développement]
 - Des applications iOS et Windows avec les états concentration/pause/repos/arrêt, des vérifications d’objectif, un historique local et des adaptateurs de plateforme.
 - Valeurs par défaut d’une nouvelle installation : 50 minutes de concentration, 10 minutes de repos, intervalle de vérification de 12 à 18 minutes, fenêtre de réponse de 20 secondes, notifications désactivées, son au premier plan désactivé.
 - Réponses explicites : « toujours sur mon objectif », « je viens d’être distrait » ou « ignorer » ; le temps de concentration continue pendant la vérification.
+- Lorsque les notifications sont activées, les notifications iOS et Windows affichent les boutons « toujours sur mon objectif » et « je viens d’être distrait ». La réponse est enregistrée sur la même vérification (marquée comme venant d’une notification), la première réponse prévaut et ignorer la notification revient à ne pas répondre.
 - Les vérifications non essentielles peuvent être désactivées pour toute une séance ; un signalement de distraction n’amène jamais l’heuristique à augmenter la fréquence des interruptions.
 - L’objectif, le déclencheur de distraction et l’action de reprise suivante sont modifiables par l’utilisateur, plutôt que traités comme un scénario universel.
 - Stockage exclusivement local, sans compte, serveur, clé API, SDK publicitaire ni analyse à distance.

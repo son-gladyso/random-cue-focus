@@ -232,6 +232,19 @@ MeasurementQualityReport validateMeasurementData(
         );
       }
       previousEvent = event;
+      if (event.channel == PromptChannel.notification &&
+          event.type != PromptResponseType.onTask &&
+          event.type != PromptResponseType.offTask) {
+        issues.add(
+          MeasurementIssue(
+            code: 'invalid_notification_event',
+            severity: MeasurementIssueSeverity.high,
+            message:
+                'Only on-task or off-task answers can come from a notification.',
+            sessionId: session.id,
+          ),
+        );
+      }
       if (event.elapsedSeconds < 0 ||
           event.elapsedSeconds > session.plannedFocusSeconds) {
         issues.add(
@@ -338,19 +351,43 @@ MeasurementQualityReport validateMeasurementData(
           .where((event) => event.type == PromptResponseType.missed)
           .length;
       if (missed > 0) {
-        // A missed check was never displayed, so it can have no exposure,
-        // response, or timeout of its own.
-        if (missed != 1 || entry.value.length != 1) {
+        // A missed check was never displayed in the app, so it has no in-app
+        // exposure, response, or timeout. The only thing that may follow it is
+        // one answer from the OS notification's action button.
+        final rest = entry.value.skip(1).toList(growable: false);
+        final validLateAnswer =
+            rest.length == 1 &&
+            rest.single.channel == PromptChannel.notification &&
+            (rest.single.type == PromptResponseType.onTask ||
+                rest.single.type == PromptResponseType.offTask);
+        if (missed != 1 ||
+            entry.value.first.type != PromptResponseType.missed ||
+            (rest.isNotEmpty && !validLateAnswer)) {
           issues.add(
             MeasurementIssue(
               code: 'invalid_missed_prompt_record',
               severity: MeasurementIssueSeverity.high,
               message:
-                  'A missed prompt must be a single event with no exposure or '
-                  'response.',
+                  'A missed prompt may be followed only by one notification '
+                  'answer, never by in-app exposure or responses.',
               sessionId: session.id,
             ),
           );
+        } else if (validLateAnswer) {
+          final answer = rest.single;
+          final expectedLatency =
+              answer.elapsedSeconds - entry.value.first.elapsedSeconds;
+          if (answer.responseLatencySeconds != null &&
+              answer.responseLatencySeconds != expectedLatency) {
+            issues.add(
+              MeasurementIssue(
+                code: 'inconsistent_response_latency',
+                severity: MeasurementIssueSeverity.medium,
+                message: 'Stored response latency disagrees with elapsed time.',
+                sessionId: session.id,
+              ),
+            );
+          }
         }
         continue;
       }

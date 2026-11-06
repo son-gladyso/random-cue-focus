@@ -92,6 +92,43 @@ void main() {
     expect(profile.sparseChecks.checkResponseRate, isNull);
     expect(profile.sparseChecks.toJson()['missedChecks'], 1);
   });
+
+  test('a missed check answered from its notification is exposure', () {
+    final started = DateTime.utc(2026, 8, 27, 8);
+    final answered = _studySession(
+      index: 1,
+      condition: StudyCondition.sparseChecks,
+      started: started.add(const Duration(days: 1)),
+      completed: true,
+      missedCheck: true,
+      extraEvents: [
+        PromptEvent(
+          promptId: 'prompt-1',
+          elapsedSeconds: 660,
+          occurredAt: started.add(const Duration(days: 1, minutes: 11)),
+          type: PromptResponseType.onTask,
+          responseLatencySeconds: 60,
+          channel: PromptChannel.notification,
+        ),
+      ],
+    );
+    final profile = buildLocalStudyDataProfile([
+      _studySession(
+        index: 0,
+        condition: StudyCondition.noChecks,
+        started: started,
+        completed: true,
+      ),
+      answered,
+    ], now: DateTime.utc(2026, 8, 30));
+
+    expect(profile.qualityReport.issues, isEmpty);
+    expect(profile.sparseChecks.shownChecks, 0);
+    expect(profile.sparseChecks.missedChecksAnsweredByNotification, 1);
+    expect(profile.sparseChecks.reachedChecks, 1);
+    expect(profile.sparseChecks.exposureRate, 1);
+    expect(profile.sparseChecks.checkResponseRate, 1);
+  });
 }
 
 FocusSession _studySession({
@@ -101,6 +138,7 @@ FocusSession _studySession({
   required bool completed,
   bool withCheck = false,
   bool missedCheck = false,
+  List<PromptEvent> extraEvents = const [],
   SessionOutcomeReport? outcome,
 }) {
   final plannedOffsets = withCheck || missedCheck ? const [600] : const <int>[];
@@ -141,7 +179,7 @@ FocusSession _studySession({
     restSeconds: 0,
     completed: completed,
     modeName: 'test',
-    promptEvents: events,
+    promptEvents: [...events, ...extraEvents],
     measurementContext: MeasurementContext(
       platform: AppPlatform.windows,
       appVersion: '0.2.0+2',

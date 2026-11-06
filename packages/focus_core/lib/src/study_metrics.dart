@@ -17,6 +17,7 @@ class StudyConditionMetrics {
     required this.answeredChecks,
     required this.skippedOrDelayedChecks,
     this.missedChecks = 0,
+    this.missedChecksAnsweredByNotification = 0,
   });
 
   final StudyCondition condition;
@@ -36,6 +37,13 @@ class StudyConditionMetrics {
   /// Not exposure; reported so planned-versus-shown gaps are explained.
   final int missedChecks;
 
+  /// Missed checks later answered from the notification: exposure that
+  /// happened outside the app.
+  final int missedChecksAnsweredByNotification;
+
+  /// Checks the person demonstrably saw, in the app or via the notification.
+  int get reachedChecks => shownChecks + missedChecksAnsweredByNotification;
+
   double? get completionRate => _ratio(completedSessions, assignedSessions);
   double? get exposureRate => _ratio(exposedSessions, assignedSessions);
   double? get meaningfulProgressResponseCoverage =>
@@ -44,7 +52,7 @@ class StudyConditionMetrics {
       _ratio(meaningfulProgressYes, meaningfulProgressAnswers);
   double? get burdenResponseCoverage => _ratio(burdenAnswers, assignedSessions);
   double? get highBurdenRate => _ratio(highBurdenAnswers, burdenAnswers);
-  double? get checkResponseRate => _ratio(answeredChecks, shownChecks);
+  double? get checkResponseRate => _ratio(answeredChecks, reachedChecks);
 
   Map<String, Object?> toJson() {
     return {
@@ -61,6 +69,8 @@ class StudyConditionMetrics {
       'answeredChecks': answeredChecks,
       'skippedOrDelayedChecks': skippedOrDelayedChecks,
       'missedChecks': missedChecks,
+      'missedChecksAnsweredByNotification': missedChecksAnsweredByNotification,
+      'reachedChecks': reachedChecks,
       'completionRate': completionRate,
       'exposureRate': exposureRate,
       'meaningfulProgressResponseCoverage': meaningfulProgressResponseCoverage,
@@ -213,6 +223,7 @@ StudyConditionMetrics _conditionMetrics(
   var answeredChecks = 0;
   var skippedOrDelayedChecks = 0;
   var missedChecks = 0;
+  var missedAnswered = 0;
 
   for (final session in eligible) {
     if (session.completed) completedSessions += 1;
@@ -221,7 +232,19 @@ StudyConditionMetrics _conditionMetrics(
         .where((event) => event.type == PromptResponseType.shown)
         .length;
     shownChecks += shown;
-    if (shown > 0) exposedSessions += 1;
+    final missedPromptIds = {
+      for (final event in session.promptEvents)
+        if (event.type == PromptResponseType.missed) event.promptId,
+    };
+    final answeredMissed = session.promptEvents
+        .where(
+          (event) =>
+              event.channel == PromptChannel.notification &&
+              missedPromptIds.contains(event.promptId),
+        )
+        .length;
+    missedAnswered += answeredMissed;
+    if (shown + answeredMissed > 0) exposedSessions += 1;
     answeredChecks += session.promptEvents
         .where(
           (event) =>
@@ -268,6 +291,7 @@ StudyConditionMetrics _conditionMetrics(
     answeredChecks: answeredChecks,
     skippedOrDelayedChecks: skippedOrDelayedChecks,
     missedChecks: missedChecks,
+    missedChecksAnsweredByNotification: missedAnswered,
   );
 }
 

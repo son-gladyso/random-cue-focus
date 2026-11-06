@@ -43,6 +43,7 @@ As instruções de compilação e execução estão em [Desenvolvimento](#develo
 - Aplicativos iOS e Windows com estados de foco/pausa/descanso/parada, verificações de objetivo, histórico local e adaptadores de plataforma.
 - Padrões de uma nova instalação: 50 minutos de foco, 10 de descanso, intervalo de verificação de 12–18 minutos, janela de resposta de 20 segundos, notificações desativadas e som em primeiro plano desativado.
 - Respostas explícitas: “continuo no objetivo”, “acabei de me distrair” ou “pular”; o tempo de foco continua durante a verificação.
+- Com as notificações ativadas, as notificações do iOS e do Windows mostram os botões “continuo no objetivo” e “acabei de me distrair”. A resposta é registrada na mesma verificação (marcada como vinda de uma notificação), vale a primeira resposta e dispensar a notificação significa não responder.
 - Verificações não essenciais podem ser desativadas para toda uma sessão; relatos de desvio da tarefa nunca fazem a heurística aumentar a frequência das interrupções.
 - O objetivo, o gatilho de distração e a próxima ação de retomada são editáveis pelo usuário, em vez de serem tratados como um roteiro universal.
 - Armazenamento exclusivamente local, sem conta, servidor, chave de API, SDK de publicidade ou análise remota.

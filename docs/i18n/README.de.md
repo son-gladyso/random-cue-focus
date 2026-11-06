@@ -43,6 +43,7 @@ Anleitungen zum Bauen und Ausführen stehen unter [Entwicklung](#develop). Eine 
 - iOS- und Windows-Apps mit Fokus-/Pause-/Ruhe-/Stopp-Zuständen, Zielprüfungen, lokalem Verlauf und Plattformadaptern.
 - Standardwerte bei Neuinstallation: 50 Minuten Fokus, 10 Minuten Ruhe, Prüfintervall von 12–18 Minuten, Antwortfenster von 20 Sekunden, Benachrichtigungen aus, Vordergrundton aus.
 - Eindeutige Antworten: „weiter beim Ziel“, „gerade abgelenkt“ oder „überspringen“. Die Fokuszeit läuft während der Prüfung weiter.
+- Bei aktivierten Benachrichtigungen zeigen iOS-Mitteilungen und Windows-Benachrichtigungen die Schaltflächen „weiter beim Ziel“ und „gerade abgelenkt“. Die Antwort wird bei derselben Prüfung gespeichert (als Antwort aus einer Benachrichtigung gekennzeichnet), die erste Antwort zählt, und das Wegwischen gilt als keine Antwort.
 - Nicht wesentliche Zielprüfungen können für eine gesamte Sitzung deaktiviert werden. Meldungen über ein Abschweifen führen niemals dazu, dass die Heuristik die Unterbrechungshäufigkeit erhöht.
 - Ziel, Ablenkungsauslöser und nächste Rückkehrhandlung sind durch den Nutzer bearbeitbar und werden nicht als universelles Skript behandelt.
 - Ausschließlich lokale Speicherung ohne Konto, Server, API-Schlüssel, Werbe-SDK oder entfernte Analysedienste.

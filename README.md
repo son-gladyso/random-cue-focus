@@ -37,6 +37,7 @@ Build and run instructions are in [Develop](#develop). No device recording is in
 - iOS and Windows apps with focus/pause/rest/stop states, goal checks, local history, and platform adapters.
 - Fresh-install defaults: 50-minute focus, 10-minute rest, 12–18-minute check range, 20-second response window, notifications off, foreground sound off.
 - Explicit responses: “still on goal”, “just distracted”, or “skip”; focus time continues during the check.
+- When notifications are turned on, iOS notifications and Windows toasts show “still on goal” and “just distracted” buttons. A button press is recorded on the same check (flagged as answered from a notification), the first answer wins, and dismissing the notification means no answer.
 - Nonessential goal checks can be disabled for an entire session; off-task reports never cause the heuristic to increase interruption frequency.
 - The goal, distraction trigger, and next recovery action are user-editable instead of being treated as a universal script.
 - Local-only storage with no account, server, API key, advertising SDK, or remote analytics.

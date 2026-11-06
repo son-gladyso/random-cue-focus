@@ -6,6 +6,8 @@ class LocalOutcomeSummary {
     required this.completedSessionCount,
     required this.cuesShown,
     this.cuesMissed = 0,
+    this.missedChecksAnsweredByNotification = 0,
+    this.notificationAnswers = 0,
     required this.onTaskResponses,
     required this.offTaskResponses,
     required this.skippedResponses,
@@ -23,6 +25,14 @@ class LocalOutcomeSummary {
   /// Planned checks that came due while the in-app card could not be seen.
   /// They are excluded from [cuesShown] and every response-rate denominator.
   final int cuesMissed;
+
+  /// Missed checks later answered from the notification. Seeing and answering
+  /// the notification is exposure, so these join [checksReached].
+  final int missedChecksAnsweredByNotification;
+
+  /// Answers given from a notification action, whether the in-app card was
+  /// missed or had already timed out.
+  final int notificationAnswers;
   final int onTaskResponses;
   final int offTaskResponses;
   final int skippedResponses;
@@ -35,9 +45,13 @@ class LocalOutcomeSummary {
   int get explicitResponses =>
       onTaskResponses + offTaskResponses + skippedResponses;
 
+  /// Checks the person demonstrably saw: shown in the app, or answered from
+  /// the notification after the in-app card was missed.
+  int get checksReached => cuesShown + missedChecksAnsweredByNotification;
+
   double? get responseRate {
-    if (cuesShown == 0) return null;
-    return (explicitResponses / cuesShown).clamp(0, 1).toDouble();
+    if (checksReached == 0) return null;
+    return (explicitResponses / checksReached).clamp(0, 1).toDouble();
   }
 
   double? get offTaskShare {
@@ -66,6 +80,8 @@ LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
   var completed = 0;
   var shown = 0;
   var missed = 0;
+  var missedAnswered = 0;
+  var notificationAnswers = 0;
   var onTask = 0;
   var offTask = 0;
   var skipped = 0;
@@ -92,7 +108,15 @@ LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
       burdenAnswers += 1;
       if (outcome!.interruptionBurden! >= 3) highBurdenAnswers += 1;
     }
+    final missedPromptIds = {
+      for (final event in session.promptEvents)
+        if (event.type == PromptResponseType.missed) event.promptId,
+    };
     for (final event in session.promptEvents) {
+      if (event.channel == PromptChannel.notification) {
+        notificationAnswers += 1;
+        if (missedPromptIds.contains(event.promptId)) missedAnswered += 1;
+      }
       switch (event.type) {
         case PromptResponseType.shown:
           shown += 1;
@@ -122,6 +146,8 @@ LocalOutcomeSummary summarizeLocalOutcomes(List<FocusSession> sessions) {
     completedSessionCount: completed,
     cuesShown: shown,
     cuesMissed: missed,
+    missedChecksAnsweredByNotification: missedAnswered,
+    notificationAnswers: notificationAnswers,
     onTaskResponses: onTask,
     offTaskResponses: offTask,
     skippedResponses: skipped,

@@ -25,6 +25,16 @@ enum PromptResponseType {
   missed,
 }
 
+/// Where a prompt event happened. Absent in stored data means [inApp].
+enum PromptChannel {
+  /// The in-app goal-check card.
+  inApp,
+
+  /// An action button on an OS notification (iOS notification, Windows toast).
+  /// An answer here is also proof that the notification was seen.
+  notification,
+}
+
 enum AppPlatform { ios, windows, unknown }
 
 enum MeaningfulProgressResponse { yes, no, unsure }
@@ -461,6 +471,7 @@ class PromptEvent {
     this.promptId = '',
     this.plannedOffsetSeconds,
     this.responseLatencySeconds,
+    this.channel = PromptChannel.inApp,
   });
 
   final int elapsedSeconds;
@@ -469,6 +480,7 @@ class PromptEvent {
   final String promptId;
   final int? plannedOffsetSeconds;
   final int? responseLatencySeconds;
+  final PromptChannel channel;
 
   Map<String, Object?> toJson() {
     return {
@@ -478,6 +490,7 @@ class PromptEvent {
       'promptId': promptId,
       'plannedOffsetSeconds': plannedOffsetSeconds,
       'responseLatencySeconds': responseLatencySeconds,
+      'channel': channel.name,
     };
   }
 
@@ -492,6 +505,9 @@ class PromptEvent {
       promptId: _bounded(json['promptId'] as String? ?? '', 120),
       plannedOffsetSeconds: (json['plannedOffsetSeconds'] as num?)?.toInt(),
       responseLatencySeconds: (json['responseLatencySeconds'] as num?)?.toInt(),
+      channel: json['channel'] == PromptChannel.notification.name
+          ? PromptChannel.notification
+          : PromptChannel.inApp,
     );
   }
 }
