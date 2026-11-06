@@ -51,7 +51,7 @@ Primary burden guardrail:
 
 - high-burden rate: burden `3–4` divided by sessions with an explicit burden answer.
 
-Supporting measures include outcome response coverage, checks planned/shown, response/skip/timeout mix, response latency, session completion as a behavioral fact, whole-session check disabling, and protocol violations. Goal-return rate is exploratory because it exists only in sessions with multiple answered checks and cannot be compared naively with a no-check arm.
+Supporting measures include outcome response coverage, checks planned/shown/missed, response/skip/timeout mix, response latency, session completion as a behavioral fact, whole-session check disabling, and protocol violations. Goal-return rate is exploratory because it exists only in sessions with multiple answered checks and cannot be compared naively with a no-check arm.
 
 Post-session answers are optional. Missing answers remain missing; they are never scored as failure or success. Every arm-level result must show both participant and session counts, eligible denominators, and outcome-response coverage. Because the current UI asks only after completed sessions, coverage must also be stratified by completion status and complete-case outcome differences must not be presented as causal effects.
 
@@ -75,7 +75,7 @@ Before analysis, run the shared structural validator and `buildLocalStudyDataPro
 - unique session and assignment keys within each participant export;
 - assignment timestamp at or before session start;
 - no exposure in assigned `noChecks` sessions;
-- planned-versus-shown prompt counts and timing;
+- planned-versus-shown prompt counts and timing, with `missed` checks explaining unseen planned offsets rather than counting as exposure;
 - exactly one explicit response at most per shown prompt;
 - valid outcome ranges and missingness by condition;
 - completion, actual exposure, outcome-response coverage, and high burden separately by condition;

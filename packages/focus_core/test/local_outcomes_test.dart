@@ -51,4 +51,34 @@ void main() {
     expect(summary.userValuedSessionRate, isNull);
     expect(summary.highBurdenRate, isNull);
   });
+
+  test('missed checks are counted apart from shown checks', () {
+    PromptEvent at(PromptResponseType type) => PromptEvent(
+      elapsedSeconds: 600,
+      occurredAt: DateTime(2026),
+      type: type,
+    );
+    final summary = summarizeLocalOutcomes([
+      FocusSession(
+        id: 'missed',
+        startedAt: DateTime(2026),
+        endedAt: DateTime(2026, 1, 1, 1),
+        plannedFocusSeconds: 3000,
+        focusSeconds: 3000,
+        restSeconds: 0,
+        completed: true,
+        modeName: 'test',
+        promptEvents: [
+          at(PromptResponseType.missed),
+          at(PromptResponseType.missed),
+          at(PromptResponseType.shown),
+          at(PromptResponseType.onTask),
+        ],
+      ),
+    ]);
+
+    expect(summary.cuesMissed, 2);
+    expect(summary.cuesShown, 1);
+    expect(summary.responseRate, 1);
+  });
 }

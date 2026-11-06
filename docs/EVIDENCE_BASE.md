@@ -6,7 +6,7 @@ Last reviewed: 2026-08-27
 
 The original product hypothesis—frequent random audible cues followed by a mandatory 10-second microbreak—was not supported strongly enough for a default experience. The upgrade uses a lower-interruption hypothesis: state a goal, receive an occasional optional check, record current state, and apply a prewritten recovery action after distraction.
 
-No reviewed study directly validates Random Cue Focus, its 12–18-minute default, or an adaptive timer as a treatment or guaranteed productivity tool. The interval is a conservative, user-adjustable product heuristic, and nonessential checks can be disabled for the whole session. It should be changed or removed if product data shows burden without user-valued benefit. Off-task self-reports never cause more frequent checks; high skip burden may only reduce frequency.
+No reviewed study directly validates Random Cue Focus, its 12–18-minute default, or an adaptive timer as a treatment or guaranteed productivity tool. The interval is a conservative, user-adjustable product heuristic, and nonessential checks can be disabled for the whole session. It should be changed or removed if product data shows burden without user-valued benefit. Off-task self-reports never cause more frequent checks; a high share of skipped, deferred, or timed-out checks may only reduce frequency.
 
 ## Claim-to-feature matrix
 

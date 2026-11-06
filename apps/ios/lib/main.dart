@@ -44,7 +44,8 @@ class RandomCueFocusApp extends StatefulWidget {
   State<RandomCueFocusApp> createState() => _RandomCueFocusAppState();
 }
 
-class _RandomCueFocusAppState extends State<RandomCueFocusApp> {
+class _RandomCueFocusAppState extends State<RandomCueFocusApp>
+    with WidgetsBindingObserver {
   late final FocusEngine engine;
 
   @override
@@ -56,10 +57,18 @@ class _RandomCueFocusAppState extends State<RandomCueFocusApp> {
       sessionStore: widget.sessionStore,
       notificationService: widget.notificationService,
     );
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final inForeground = foregroundForLifecycle(state);
+    if (inForeground != null) engine.setAppInForeground(inForeground);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     engine.dispose();
     super.dispose();
   }
@@ -87,5 +96,25 @@ class _RandomCueFocusAppState extends State<RandomCueFocusApp> {
         sessionStore: widget.sessionStore,
       ),
     );
+  }
+}
+
+/// Maps a lifecycle state to whether the goal-check card can be seen.
+///
+/// `inactive` is transient on iOS (app switcher, Control Center, incoming
+/// call banner) and is left unchanged: a real move to the background always
+/// passes through `hidden`/`paused`, and the engine's tick-gap guard covers a
+/// suspension that skips the callback.
+@visibleForTesting
+bool? foregroundForLifecycle(AppLifecycleState state) {
+  switch (state) {
+    case AppLifecycleState.resumed:
+      return true;
+    case AppLifecycleState.hidden:
+    case AppLifecycleState.paused:
+    case AppLifecycleState.detached:
+      return false;
+    case AppLifecycleState.inactive:
+      return null;
   }
 }

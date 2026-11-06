@@ -1,5 +1,8 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:random_cue_focus/focus_engine.dart';
+import 'package:random_cue_focus/main.dart';
 import 'package:random_cue_focus/models.dart';
 import 'package:random_cue_focus/notification_service.dart';
 import 'package:random_cue_focus/stores.dart';
@@ -233,6 +236,326 @@ void main() {
     expect(engine.activeStudyAssignment!.condition, StudyCondition.noChecks);
     engine.dispose();
   });
+
+  group('checks that cannot be seen', () {
+    List<PromptResponseType> types(FocusEngine engine) =>
+        engine.events.map((event) => event.type).toList();
+
+    test('a check due while backgrounded is missed, not shown', () async {
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.setAppInForeground(false);
+
+      engine.advanceForTesting(400);
+
+      expect(types(engine), [PromptResponseType.missed]);
+      final missed = engine.events.single;
+      expect(missed.plannedOffsetSeconds, 300);
+      expect(missed.promptId, isNotEmpty);
+      expect(missed.responseLatencySeconds, isNull);
+      expect(engine.phase, SessionPhase.focusing);
+      expect(engine.focusElapsed, 400);
+      engine.dispose();
+    });
+
+    test('checks after returning to the foreground are shown', () async {
+      final engine = _engine(settings.copyWith(focusDurationMinutes: 20));
+      await engine.startFocus();
+      expect(engine.promptPlan.map((cue) => cue.offsetSeconds), [
+        300,
+        600,
+        900,
+      ]);
+
+      engine.setAppInForeground(false);
+      engine.advanceForTesting(400);
+      engine.setAppInForeground(true);
+      final resumedAt = engine.focusElapsed;
+      engine.advanceForTesting(600 - resumedAt);
+
+      expect(engine.phase, SessionPhase.microBreak);
+      expect(types(engine), [
+        PromptResponseType.missed,
+        PromptResponseType.shown,
+      ]);
+      engine.recordOnTask();
+      expect(engine.events.last.promptId, engine.events[1].promptId);
+      expect(engine.events[1].promptId, isNot(engine.events[0].promptId));
+      engine.dispose();
+    });
+
+    test('a check already on screen keeps its real timeout', () async {
+      // It was displayed, so leaving the app is a genuine non-response.
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.advanceForTesting(300);
+      expect(engine.phase, SessionPhase.microBreak);
+
+      engine.setAppInForeground(false);
+      engine.advanceForTesting(10);
+
+      expect(types(engine), [
+        PromptResponseType.shown,
+        PromptResponseType.ended,
+      ]);
+      engine.dispose();
+    });
+
+    test('catch-up after a long suspension replays unseen seconds', () async {
+      // Covers a suspension whose lifecycle callback never arrived.
+      final engine = _engine(settings);
+      await engine.startFocus();
+      expect(engine.appInForeground, isTrue);
+
+      engine.tickAtForTesting(DateTime.now().add(const Duration(seconds: 400)));
+
+      expect(types(engine), [PromptResponseType.missed]);
+      expect(engine.focusElapsed, inInclusiveRange(400, 401));
+      expect(engine.phase, SessionPhase.focusing);
+      engine.dispose();
+    });
+
+    test('a tick gap within tolerance is still live', () async {
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.advanceForTesting(298);
+
+      engine.tickAtForTesting(
+        DateTime.now().add(const Duration(seconds: maxLiveTickGapSeconds)),
+      );
+
+      expect(types(engine), [PromptResponseType.shown]);
+      expect(engine.phase, SessionPhase.microBreak);
+      engine.dispose();
+    });
+
+    test(
+      'a session with a missed check passes the structural validator',
+      () async {
+        final store = _MemorySessionStore();
+        final engine = FocusEngine(
+          settings: settings,
+          settingsStore: _MemorySettingsStore(),
+          sessionStore: store,
+          notificationService: _NoopNotificationService(),
+        );
+        await engine.startFocus();
+        engine.setAppInForeground(false);
+        engine.advanceForTesting(400);
+        engine.setAppInForeground(true);
+        engine.advanceForTesting(660 - engine.focusElapsed);
+        expect(engine.phase, SessionPhase.completed);
+        await engine.recordMeaningfulProgress(MeaningfulProgressResponse.yes);
+
+        final session = store.sessions.single;
+        expect(session.promptEvents.map((event) => event.type), [
+          PromptResponseType.missed,
+        ]);
+        final report = validateMeasurementData([
+          session,
+        ], now: DateTime.now().add(const Duration(days: 1)));
+        expect(report.issues, isEmpty);
+        final summary = summarizeLocalOutcomes([session]);
+        expect(summary.cuesShown, 0);
+        expect(summary.cuesMissed, 1);
+        engine.dispose();
+      },
+    );
+
+    test('lifecycle states map to goal-check visibility', () {
+      expect(foregroundForLifecycle(AppLifecycleState.resumed), isTrue);
+      expect(foregroundForLifecycle(AppLifecycleState.hidden), isFalse);
+      expect(foregroundForLifecycle(AppLifecycleState.paused), isFalse);
+      expect(foregroundForLifecycle(AppLifecycleState.detached), isFalse);
+      expect(foregroundForLifecycle(AppLifecycleState.inactive), isNull);
+    });
+  });
+
+  group('answering from a notification', () {
+    GoalCheckAnswer answer(String promptId, [bool onTask = true]) =>
+        GoalCheckAnswer(
+          promptId: promptId,
+          response: onTask
+              ? PromptResponseType.onTask
+              : PromptResponseType.offTask,
+        );
+
+    test('answers the check on screen and returns to focus', () async {
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.advanceForTesting(303);
+      final promptId = engine.events.single.promptId;
+
+      expect(engine.recordNotificationAnswer(answer(promptId, false)), isTrue);
+
+      expect(engine.phase, SessionPhase.focusing);
+      final response = engine.events.last;
+      expect(response.type, PromptResponseType.offTask);
+      expect(response.channel, PromptChannel.notification);
+      expect(response.responseLatencySeconds, 3);
+      engine.dispose();
+    });
+
+    test('answers a check missed in the background, even before the timer '
+        'has caught up', () async {
+      var now = DateTime.now();
+      final store = _MemorySessionStore();
+      final engine = FocusEngine(
+        settings: settings,
+        settingsStore: _MemorySettingsStore(),
+        sessionStore: store,
+        notificationService: _NoopNotificationService(),
+      )..clock = () => now;
+      await engine.startFocus();
+      engine.advanceForTesting(0); // stop the real ticker
+      engine.setAppInForeground(false);
+      // What the scheduled notification for the first check carries.
+      final payload = goalCheckPromptId(engine.activeSessionId!, 0);
+
+      // The person taps the notification button 400 s in; the answer arrives
+      // before the resumed ticker has replayed the gap.
+      now = now.add(const Duration(seconds: 400));
+      expect(engine.recordNotificationAnswer(answer(payload)), isTrue);
+
+      expect(engine.events.map((event) => event.type), [
+        PromptResponseType.missed,
+        PromptResponseType.onTask,
+      ]);
+      expect(engine.events.last.channel, PromptChannel.notification);
+      expect(engine.events.last.responseLatencySeconds, 100);
+
+      engine.setAppInForeground(true);
+      engine.advanceForTesting(660 - engine.focusElapsed);
+      await engine.recordMeaningfulProgress(MeaningfulProgressResponse.yes);
+      final session = store.sessions.single;
+      final report = validateMeasurementData([
+        session,
+      ], now: now.add(const Duration(days: 1)));
+      expect(report.issues.map((issue) => issue.code), isEmpty);
+      final summary = summarizeLocalOutcomes([session]);
+      expect(summary.checksReached, 1);
+      expect(summary.responseRate, 1);
+      engine.dispose();
+    });
+
+    test('answers a check that timed out on screen', () async {
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.advanceForTesting(330);
+      final promptId = engine.events.first.promptId;
+      expect(engine.events.last.type, PromptResponseType.ended);
+
+      expect(engine.recordNotificationAnswer(answer(promptId)), isTrue);
+      expect(engine.events.last.channel, PromptChannel.notification);
+      expect(engine.events.last.responseLatencySeconds, 30);
+      engine.dispose();
+    });
+
+    test('first answer wins and the notification is cleared', () async {
+      final notifications = _RecordingNotificationService();
+      final engine = FocusEngine(
+        settings: settings,
+        settingsStore: _MemorySettingsStore(),
+        sessionStore: _MemorySessionStore(),
+        notificationService: notifications,
+      );
+      await engine.startFocus();
+      engine.advanceForTesting(300);
+      final promptId = engine.events.single.promptId;
+      engine.recordOnTask();
+
+      expect(notifications.cleared, [300]);
+      expect(engine.recordNotificationAnswer(answer(promptId, false)), isFalse);
+      expect(engine.events.map((event) => event.type), [
+        PromptResponseType.shown,
+        PromptResponseType.onTask,
+      ]);
+      engine.dispose();
+    });
+
+    test('ignores unknown checks and answers after the session', () async {
+      final engine = _engine(settings);
+      await engine.startFocus();
+      engine.advanceForTesting(330);
+      final promptId = engine.events.first.promptId;
+
+      expect(engine.recordNotificationAnswer(answer('other:0')), isFalse);
+      await engine.stop();
+      expect(engine.recordNotificationAnswer(answer(promptId)), isFalse);
+      engine.dispose();
+    });
+
+    test('notification button presses reach the engine', () async {
+      final notifications = _NoopNotificationService();
+      final engine = FocusEngine(
+        settings: settings,
+        settingsStore: _MemorySettingsStore(),
+        sessionStore: _MemorySessionStore(),
+        notificationService: notifications,
+      );
+      await engine.startFocus();
+      engine.advanceForTesting(302);
+      final promptId = engine.events.single.promptId;
+
+      notifications.handleResponse(
+        NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotification,
+          payload: promptId,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.phase, SessionPhase.microBreak, reason: 'plain tap');
+
+      notifications.handleResponse(
+        NotificationResponse(
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          actionId: goalCheckOffTaskActionId,
+          payload: promptId,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(engine.phase, SessionPhase.focusing);
+      expect(engine.events.last.type, PromptResponseType.offTask);
+      expect(engine.events.last.channel, PromptChannel.notification);
+      engine.dispose();
+    });
+  });
+
+  test('notification payloads match engine prompt IDs after resuming', () {
+    const cues = [
+      PromptCue(offsetSeconds: 300),
+      PromptCue(offsetSeconds: 600),
+      PromptCue(offsetSeconds: 900),
+    ];
+    final planned = plannedGoalCheckNotifications(
+      sessionId: 'session-a',
+      cues: cues,
+      elapsedSeconds: 450,
+    );
+
+    expect(planned.map((check) => check.promptId), [
+      goalCheckPromptId('session-a', 1),
+      goalCheckPromptId('session-a', 2),
+    ]);
+    expect(planned.map((check) => check.secondsFromNow), [150, 450]);
+    expect(planned.first.id, stableNotificationId('session-a', 600));
+  });
+
+  test('goal-check category has two app-opening answer buttons', () {
+    expect(goalCheckCategory.identifier, goalCheckNotificationCategory);
+    expect(goalCheckCategory.actions.map((action) => action.identifier), [
+      goalCheckOnTaskActionId,
+      goalCheckOffTaskActionId,
+    ]);
+    for (final action in goalCheckCategory.actions) {
+      expect(
+        action.options,
+        contains(DarwinNotificationActionOption.foreground),
+      );
+    }
+  });
 }
 
 FocusEngine _engine(FocusSettings settings) {
@@ -334,5 +657,17 @@ class _ThrowingNotificationService extends _NoopNotificationService {
     required int elapsedSeconds,
   }) async {
     throw StateError('simulated scheduling failure');
+  }
+}
+
+class _RecordingNotificationService extends _NoopNotificationService {
+  final cleared = <int>[];
+
+  @override
+  Future<void> clearGoalCheck({
+    required String sessionId,
+    required int offsetSeconds,
+  }) async {
+    cleared.add(offsetSeconds);
   }
 }

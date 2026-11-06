@@ -14,7 +14,7 @@ Evaluate whether sparse goal checks help users return to a chosen task without c
 
 ### Driver metrics
 
-- Check response rate = on-task + off-task + acknowledged responses / checks shown.
+- Check response rate = on-task + off-task + acknowledged responses (in the app or from a notification) / reached checks (shown in the app, or missed in the app and answered from the notification). Report notification answers separately by `channel`; they are given at a different moment and may not be comparable with in-app answers.
 - Off-task self-report share = off-task responses / answered checks.
 - Planned-session completion rate and timer minutes, labeled only as behavior.
 - Recovery-plan presence and goal presence at session start.
@@ -41,7 +41,7 @@ Schema `v6` retains correlated prompt IDs, planned-versus-shown offsets, elapsed
 3. **Feasibility phase:** opt-in within-person crossover comparing no checks with sparse checks. The implementation supports randomized AB/BA starting order, alternation, and assignment-first persistence; freeze and externally preregister a cohort-specific analysis plan before examining real condition differences.
 4. **Confirmatory phase:** only if feasibility is positive, run a sufficiently powered randomized evaluation with a user-valued outcome and burden guardrails.
 
-Do not tune the cadence against completion minutes or short-term app opens alone. That would optimize timer/app adherence, not the stated outcome. Off-task responses must never trigger more interruptions; only burden signals such as repeated skips may lengthen cadence. There is no evidence-backed universal optimum for the 12–18-minute default, so frequency changes require a preregistered comparison with burden guardrails.
+Do not tune the cadence against completion minutes or short-term app opens alone. That would optimize timer/app adherence, not the stated outcome. Off-task responses must never trigger more interruptions; only burden signals—skipped, deferred, or timed-out checks—may lengthen cadence. Checks recorded as `missed` were never displayed and are neither burden nor exposure. There is no evidence-backed universal optimum for the 12–18-minute default, so frequency changes require a preregistered comparison with burden guardrails.
 
 Observational product logs can identify reliability and usability problems, but they cannot establish that a cadence caused better outcomes. In experiments, store assignment before exposure, distinguish assignment from actual exposure, analyze repeated sessions at the participant level, report missing-outcome coverage by arm and completion status, and do not condition the primary analysis on answering a prompt.
 

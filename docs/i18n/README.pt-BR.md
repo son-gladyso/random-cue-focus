@@ -43,6 +43,7 @@ As instruções de compilação e execução estão em [Desenvolvimento](#develo
 - Aplicativos iOS e Windows com estados de foco/pausa/descanso/parada, verificações de objetivo, histórico local e adaptadores de plataforma.
 - Padrões de uma nova instalação: 50 minutos de foco, 10 de descanso, intervalo de verificação de 12–18 minutos, janela de resposta de 20 segundos, notificações desativadas e som em primeiro plano desativado.
 - Respostas explícitas: “continuo no objetivo”, “acabei de me distrair” ou “pular”; o tempo de foco continua durante a verificação.
+- Com as notificações ativadas, as notificações do iOS e do Windows mostram os botões “continuo no objetivo” e “acabei de me distrair”. A resposta é registrada na mesma verificação (marcada como vinda de uma notificação), vale a primeira resposta e dispensar a notificação significa não responder.
 - Verificações não essenciais podem ser desativadas para toda uma sessão; relatos de desvio da tarefa nunca fazem a heurística aumentar a frequência das interrupções.
 - O objetivo, o gatilho de distração e a próxima ação de retomada são editáveis pelo usuário, em vez de serem tratados como um roteiro universal.
 - Armazenamento exclusivamente local, sem conta, servidor, chave de API, SDK de publicidade ou análise remota.
@@ -50,7 +51,7 @@ As instruções de compilação e execução estão em [Desenvolvimento](#develo
 - Um experimento cruzado local está disponível somente após consentimento explícito. Ele alterna sessões sem verificações e com verificações espaçadas, persiste a atribuição antes da exposição, nunca faz upload automaticamente e pode ser abandonado a qualquer momento.
 - CI para testes do núcleo compartilhado, análise/testes dos dois aplicativos, compilação de lançamento do Windows e compilação do simulador iOS.
 
-As configurações e os eventos de sessão existentes da versão `0.1.x` são migrados, e não descartados silenciosamente. A versão `6` do esquema mantém todas as migrações anteriores, a inscrição explícita no estudo e a atribuição por sessão, acrescentando, para novas sessões de estudo, um retrato do estado real de ativação das verificações, do intervalo e da janela de resposta. O esquema v2 de exportação de pesquisa remove o timestamp absoluto da atribuição, além dos IDs brutos de sessão, datas e texto livre. A cadência adaptativa é uma heurística determinística e inspecionável, não um modelo de aprendizado de máquina, e aguarda pelo menos três sessões e seis respostas antes de alterar um intervalo.
+As configurações e os eventos de sessão existentes da versão `0.1.x` são migrados, e não descartados silenciosamente. A versão `6` do esquema mantém todas as migrações anteriores, a inscrição explícita no estudo e a atribuição por sessão, acrescentando, para novas sessões de estudo, um retrato do estado real de ativação das verificações, do intervalo e da janela de resposta. O esquema v2 de exportação de pesquisa remove o timestamp absoluto da atribuição, além dos IDs brutos de sessão, datas e texto livre. A cadência adaptativa é uma heurística determinística e inspecionável, não um modelo de aprendizado de máquina, e aguarda pelo menos três sessões e seis verificações concluídas (resposta, pulo ou tempo esgotado) antes de alterar um intervalo.
 
 <a id="evidence-boundary"></a>
 

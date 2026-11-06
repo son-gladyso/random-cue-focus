@@ -96,6 +96,7 @@ Map<String, Object?> _exportSession(
           'elapsedSeconds': event.elapsedSeconds,
           'plannedOffsetSeconds': event.plannedOffsetSeconds,
           'responseLatencySeconds': event.responseLatencySeconds,
+          'channel': event.channel.name,
         },
     ],
   };

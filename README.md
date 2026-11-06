@@ -37,6 +37,7 @@ Build and run instructions are in [Develop](#develop). No device recording is in
 - iOS and Windows apps with focus/pause/rest/stop states, goal checks, local history, and platform adapters.
 - Fresh-install defaults: 50-minute focus, 10-minute rest, 12–18-minute check range, 20-second response window, notifications off, foreground sound off.
 - Explicit responses: “still on goal”, “just distracted”, or “skip”; focus time continues during the check.
+- When notifications are turned on, iOS notifications and Windows toasts show “still on goal” and “just distracted” buttons. A button press is recorded on the same check (flagged as answered from a notification), the first answer wins, and dismissing the notification means no answer.
 - Nonessential goal checks can be disabled for an entire session; off-task reports never cause the heuristic to increase interruption frequency.
 - The goal, distraction trigger, and next recovery action are user-editable instead of being treated as a universal script.
 - Local-only storage with no account, server, API key, advertising SDK, or remote analytics.
@@ -44,7 +45,7 @@ Build and run instructions are in [Develop](#develop). No device recording is in
 - An experimental local crossover is available only after explicit consent. It alternates no-check and sparse-check sessions, persists assignment before exposure, never uploads automatically, and can be left at any time.
 - CI for shared-core tests, both app analyzers/tests, Windows release build, and iOS simulator build.
 
-Existing version `0.1.x` settings and session events are migrated rather than silently discarded. Schema version `6` retains all earlier migrations, explicit study enrollment, and per-session assignment while adding the actual goal-check enabled, interval, and response-window snapshot for new study sessions. Research export schema v2 removes the absolute assignment timestamp as well as raw session IDs, dates, and free text. The adaptive cadence is a deterministic, inspectable heuristic—not a machine-learning model—and waits for at least three sessions and six responses before changing an interval.
+Existing version `0.1.x` settings and session events are migrated rather than silently discarded. Schema version `6` retains all earlier migrations, explicit study enrollment, and per-session assignment while adding the actual goal-check enabled, interval, and response-window snapshot for new study sessions. Research export schema v2 removes the absolute assignment timestamp as well as raw session IDs, dates, and free text. The adaptive cadence is a deterministic, inspectable heuristic—not a machine-learning model—and waits for at least three sessions and six resolved checks (an answer, skip, or timeout) before changing an interval. Skips and timeouts can only lengthen it. A check that comes due while the app cannot be seen (backgrounded or asleep) is recorded as `missed`, not as shown, and does not affect cadence.
 
 ## Evidence boundary
 

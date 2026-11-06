@@ -7,6 +7,11 @@ import 'models.dart';
 import 'notification_adapter.dart';
 import 'repositories.dart';
 
+/// A wall-clock gap between ticks longer than this means the timer was
+/// suspended (for example, the PC slept). Seconds replayed to catch up after
+/// such a gap were never on screen.
+const maxLiveTickGapSeconds = 3;
+
 class FocusController extends ChangeNotifier {
   FocusController({
     required FocusSettings settings,
@@ -16,7 +21,11 @@ class FocusController extends ChangeNotifier {
   }) : _settings = settings.normalized(),
        _repository = repository,
        _notificationAdapter = notificationAdapter,
-       _planner = planner;
+       _planner = planner {
+    _answerSubscription = notificationAdapter.goalCheckAnswers.listen(
+      recordNotificationAnswer,
+    );
+  }
 
   final SessionRepository _repository;
   final NotificationAdapter _notificationAdapter;
@@ -35,6 +44,14 @@ class FocusController extends ChangeNotifier {
   int _nextPromptIndex = 0;
   Future<void>? _sessionSaveFuture;
   String? _activePromptId;
+  StreamSubscription<GoalCheckAnswer>? _answerSubscription;
+
+  @visibleForTesting
+  String? get activeSessionId => _activeSessionId;
+
+  /// Wall clock for the ticker; replaceable so tests can simulate sleep.
+  @visibleForTesting
+  DateTime Function() clock = DateTime.now;
   int? _activePromptStartedElapsed;
   MeasurementContext _measurementContext = const MeasurementContext();
   SessionOutcomeReport? _outcomeReport;
@@ -188,7 +205,7 @@ class FocusController extends ChangeNotifier {
       studyAssignment: studyAssignment,
     );
     _phase = SessionPhase.focusing;
-    _lastTick = now;
+    _lastTick = clock();
     _startTicker();
     notifyListeners();
   }
@@ -207,7 +224,7 @@ class FocusController extends ChangeNotifier {
     if (_phase != SessionPhase.paused) return;
     _phase = _phaseBeforePause ?? SessionPhase.focusing;
     _phaseBeforePause = null;
-    _lastTick = DateTime.now();
+    _lastTick = clock();
     _startTicker();
     notifyListeners();
   }
@@ -261,8 +278,46 @@ class FocusController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _finishPrompt(PromptResponseType response) {
-    if (_phase != SessionPhase.microBreak) return;
+  /// Applies an answer chosen from a goal-check toast button.
+  ///
+  /// Time is settled first, so a check that came due while the PC slept is
+  /// already recorded as `missed` before the answer arrives. The check on
+  /// screen is resolved directly; a check that was missed or timed out gets a
+  /// late answer; anything else (unknown, already answered, session over) is
+  /// ignored. Returns whether the answer was recorded.
+  bool recordNotificationAnswer(GoalCheckAnswer answer) {
+    if (_activeSessionId == null ||
+        _phase == SessionPhase.idle ||
+        _phase == SessionPhase.completed) {
+      return false;
+    }
+    _tick();
+    if (_activePromptId == answer.promptId &&
+        (_phase == SessionPhase.microBreak ||
+            _phaseBeforePause == SessionPhase.microBreak)) {
+      _finishPrompt(answer.response, channel: PromptChannel.notification);
+      return true;
+    }
+    final event = lateNotificationAnswerEvent(
+      events: _events,
+      answer: answer,
+      elapsedSeconds: _focusElapsed,
+      at: DateTime.now(),
+    );
+    if (event == null) return false;
+    _events.add(event);
+    notifyListeners();
+    return true;
+  }
+
+  void _finishPrompt(
+    PromptResponseType response, {
+    PromptChannel channel = PromptChannel.inApp,
+  }) {
+    final paused =
+        _phase == SessionPhase.paused &&
+        _phaseBeforePause == SessionPhase.microBreak;
+    if (_phase != SessionPhase.microBreak && !paused) return;
     _events.add(
       PromptEvent(
         elapsedSeconds: _focusElapsed,
@@ -272,12 +327,17 @@ class FocusController extends ChangeNotifier {
         responseLatencySeconds: _activePromptStartedElapsed == null
             ? null
             : _focusElapsed - _activePromptStartedElapsed!,
+        channel: channel,
       ),
     );
     _activePromptId = null;
     _activePromptStartedElapsed = null;
     _microBreakRemaining = 0;
-    _phase = SessionPhase.focusing;
+    if (paused) {
+      _phaseBeforePause = SessionPhase.focusing;
+    } else {
+      _phase = SessionPhase.focusing;
+    }
     notifyListeners();
   }
 
@@ -315,23 +375,26 @@ class FocusController extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
-  void _tick() {
-    final now = DateTime.now();
+  void _tick([DateTime? at]) {
+    final now = at ?? clock();
     final previous = _lastTick ?? now;
     final deltaSeconds = now.difference(previous).inSeconds;
     if (deltaSeconds <= 0) return;
     _lastTick = now;
+    // After a suspension (sleep/hibernate), replayed seconds were never on
+    // screen: checks that came due then are `missed`, not `shown` + `ended`.
+    final promptsVisible = deltaSeconds <= maxLiveTickGapSeconds;
     for (var i = 0; i < deltaSeconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: promptsVisible);
     }
     notifyListeners();
   }
 
-  void _advanceOneSecond() {
+  void _advanceOneSecond({required bool promptsVisible}) {
     switch (_phase) {
       case SessionPhase.focusing:
         _focusElapsed += 1;
-        _maybeStartMicroBreak();
+        _maybeStartMicroBreak(visible: promptsVisible);
         if (_focusElapsed >= _settings.focusDurationSeconds) {
           _completeFocus();
         }
@@ -375,24 +438,49 @@ class FocusController extends ChangeNotifier {
     }
   }
 
+  /// Advances live (on-screen) seconds one by one, as the ticker would.
   @visibleForTesting
   void advanceForTesting(int seconds) {
     assert(seconds >= 0);
     _ticker?.cancel();
     for (var i = 0; i < seconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: true);
     }
     _ticker?.cancel();
     notifyListeners();
   }
 
-  void _maybeStartMicroBreak() {
+  /// Runs one ticker callback as if the wall clock now read [now].
+  @visibleForTesting
+  void tickAtForTesting(DateTime now) {
+    _ticker?.cancel();
+    _tick(now);
+    _ticker?.cancel();
+  }
+
+  void _maybeStartMicroBreak({required bool visible}) {
     if (_nextPromptIndex >= _promptPlan.length) return;
     final nextCue = _promptPlan[_nextPromptIndex];
     if (_focusElapsed < nextCue.offsetSeconds) return;
 
-    final promptId = '${_activeSessionId ?? 'session'}:$_nextPromptIndex';
+    final promptId = goalCheckPromptId(
+      _activeSessionId ?? 'session',
+      _nextPromptIndex,
+    );
     _nextPromptIndex += 1;
+    if (!visible) {
+      // No card, sound, or toast: a stale alert after waking would be noise.
+      _events.add(
+        PromptEvent(
+          elapsedSeconds: _focusElapsed,
+          occurredAt: DateTime.now(),
+          type: PromptResponseType.missed,
+          promptId: promptId,
+          plannedOffsetSeconds: nextCue.offsetSeconds,
+        ),
+      );
+      return;
+    }
     _microBreakRemaining = _settings.microBreakSeconds;
     _phase = SessionPhase.microBreak;
     _activePromptId = promptId;
@@ -406,14 +494,16 @@ class FocusController extends ChangeNotifier {
         plannedOffsetSeconds: nextCue.offsetSeconds,
       ),
     );
-    unawaited(_notificationAdapter.showPrompt(settings: _settings));
+    unawaited(
+      _notificationAdapter.showPrompt(settings: _settings, promptId: promptId),
+    );
   }
 
   void _completeFocus() {
     _ticker?.cancel();
     _phase = SessionPhase.resting;
     _restElapsed = 0;
-    _lastTick = DateTime.now();
+    _lastTick = clock();
     unawaited(_notificationAdapter.showSessionComplete());
     _startTicker();
   }
@@ -475,6 +565,7 @@ class FocusController extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    unawaited(_answerSubscription?.cancel());
     super.dispose();
   }
 

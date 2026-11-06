@@ -65,50 +65,107 @@ List<PromptCue> buildPromptPlan(
   return List.unmodifiable(cues);
 }
 
+/// Minimum number of resolved (displayed) checks before cadence may change.
+const minResolvedChecksForCadence = 6;
+
+/// Share of resolved checks left unanswered at which cadence is lengthened.
+const unansweredBurdenThreshold = 0.35;
+
+/// Chooses a cadence factor from how recently displayed checks were resolved.
+///
+/// Each check a person saw resolves once: an explicit answer (`onTask`,
+/// `offTask`, `acknowledged`) or a non-answer (`skipped`, `delayed`, or a
+/// timeout `ended`). Non-answers are burden signals, so a person who lets
+/// checks expire gets fewer checks, never more. When one check has several
+/// resolutions (it timed out, then was answered from its notification), the
+/// answer wins, so the check is counted once.
+///
+/// `missed` checks were never displayed and carry no burden or attention
+/// information, so they are ignored unless later answered from the
+/// notification. Legacy `ended` events without a prompt ID come from the 0.1
+/// mandatory microbreak, which ended on its own; they are not timeouts and are
+/// ignored too.
 CadenceDecision cadenceDecisionFromHistory(List<FocusSession> sessions) {
   final recent = sessions.reversed.take(7).toList(growable: false);
-  final responses = recent
-      .expand((session) => session.promptEvents)
-      .where(
-        (event) =>
-            event.type == PromptResponseType.onTask ||
-            event.type == PromptResponseType.offTask ||
-            event.type == PromptResponseType.acknowledged ||
-            event.type == PromptResponseType.skipped,
-      )
-      .toList(growable: false);
+  final resolved = _checkResolutions(
+    recent.expand((session) => session.promptEvents),
+  );
 
-  if (recent.length < 3 || responses.length < 6) {
+  if (recent.length < 3 || resolved.length < minResolvedChecksForCadence) {
     return const CadenceDecision(factor: 1, reason: 'insufficient_history');
   }
 
-  final skipped = responses
-      .where((event) => event.type == PromptResponseType.skipped)
-      .length;
-  final onTask = responses
+  final unanswered = resolved
       .where(
-        (event) =>
-            event.type == PromptResponseType.onTask ||
-            event.type == PromptResponseType.acknowledged,
+        (type) =>
+            type == PromptResponseType.skipped ||
+            type == PromptResponseType.delayed ||
+            type == PromptResponseType.ended,
       )
       .length;
-  final offTask = responses
-      .where((event) => event.type == PromptResponseType.offTask)
+  final onTask = resolved
+      .where(
+        (type) =>
+            type == PromptResponseType.onTask ||
+            type == PromptResponseType.acknowledged,
+      )
+      .length;
+  final offTask = resolved
+      .where((type) => type == PromptResponseType.offTask)
       .length;
 
-  if (skipped / responses.length >= 0.35) {
+  if (unanswered / resolved.length >= unansweredBurdenThreshold) {
     return const CadenceDecision(factor: 1.25, reason: 'reduce_cue_burden');
   }
-  if (onTask / responses.length >= 0.8) {
+  if (onTask / resolved.length >= 0.8) {
     return const CadenceDecision(factor: 1.12, reason: 'mostly_on_task');
   }
-  if (offTask / responses.length >= 0.5) {
+  if (offTask / resolved.length >= 0.5) {
     return const CadenceDecision(
       factor: 1,
       reason: 'off_task_does_not_increase_cue_burden',
     );
   }
   return const CadenceDecision(factor: 1, reason: 'stable_cadence');
+}
+
+/// One resolution per check: correlated events are grouped by prompt ID and
+/// the strongest resolution kept; legacy uncorrelated rows count one each.
+List<PromptResponseType> _checkResolutions(Iterable<PromptEvent> events) {
+  final uncorrelated = <PromptResponseType>[];
+  final byPrompt = <String, PromptResponseType>{};
+  for (final event in events) {
+    final rank = _resolutionRank(event.type);
+    if (rank == 0) continue;
+    if (event.promptId.isEmpty) {
+      // Legacy rows: a prompt-less `ended` is the 0.1 microbreak ending.
+      if (event.type != PromptResponseType.ended) uncorrelated.add(event.type);
+      continue;
+    }
+    final previous = byPrompt[event.promptId];
+    if (previous == null || rank > _resolutionRank(previous)) {
+      byPrompt[event.promptId] = event.type;
+    }
+  }
+  return [...uncorrelated, ...byPrompt.values];
+}
+
+/// 0 = not a resolution; higher wins when one check has several.
+int _resolutionRank(PromptResponseType type) {
+  switch (type) {
+    case PromptResponseType.onTask:
+    case PromptResponseType.offTask:
+    case PromptResponseType.acknowledged:
+      return 3;
+    case PromptResponseType.skipped:
+    case PromptResponseType.delayed:
+      return 2;
+    case PromptResponseType.ended:
+      return 1;
+    case PromptResponseType.shown:
+    case PromptResponseType.missed:
+      return 0;
+  }
 }
 
 double cadenceFactorFromHistory(List<FocusSession> sessions) {

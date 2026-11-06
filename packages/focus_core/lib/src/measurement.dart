@@ -215,7 +215,8 @@ MeasurementQualityReport validateMeasurementData(
     }
 
     final eventsByPrompt = <String, List<PromptEvent>>{};
-    final shownOffsets = <int>{};
+    // Offsets resolved by exactly one `shown` (exposure) or `missed` event.
+    final resolvedOffsets = <int>{};
     PromptEvent? previousEvent;
     for (final event in session.promptEvents) {
       if (previousEvent != null &&
@@ -231,6 +232,19 @@ MeasurementQualityReport validateMeasurementData(
         );
       }
       previousEvent = event;
+      if (event.channel == PromptChannel.notification &&
+          event.type != PromptResponseType.onTask &&
+          event.type != PromptResponseType.offTask) {
+        issues.add(
+          MeasurementIssue(
+            code: 'invalid_notification_event',
+            severity: MeasurementIssueSeverity.high,
+            message:
+                'Only on-task or off-task answers can come from a notification.',
+            sessionId: session.id,
+          ),
+        );
+      }
       if (event.elapsedSeconds < 0 ||
           event.elapsedSeconds > session.plannedFocusSeconds) {
         issues.add(
@@ -257,7 +271,10 @@ MeasurementQualityReport validateMeasurementData(
           ),
         );
       }
-      if (event.type == PromptResponseType.shown &&
+      final resolvesPlannedCheck =
+          event.type == PromptResponseType.shown ||
+          event.type == PromptResponseType.missed;
+      if (resolvesPlannedCheck &&
           event.plannedOffsetSeconds != null &&
           plannedOffsets.isNotEmpty &&
           !plannedOffsets.contains(event.plannedOffsetSeconds)) {
@@ -265,12 +282,13 @@ MeasurementQualityReport validateMeasurementData(
           MeasurementIssue(
             code: 'exposure_not_in_prompt_plan',
             severity: MeasurementIssueSeverity.high,
-            message: 'Shown prompt does not match the stored session plan.',
+            message:
+                'Shown or missed prompt does not match the stored session plan.',
             sessionId: session.id,
           ),
         );
       }
-      if (event.type == PromptResponseType.shown) {
+      if (resolvesPlannedCheck) {
         final offset = event.plannedOffsetSeconds;
         if (session.dataSchemaVersion >= 4 &&
             plannedOffsets.isNotEmpty &&
@@ -279,17 +297,18 @@ MeasurementQualityReport validateMeasurementData(
             MeasurementIssue(
               code: 'shown_prompt_missing_planned_offset',
               severity: MeasurementIssueSeverity.medium,
-              message: 'Shown prompt is missing its planned offset.',
+              message: 'Shown or missed prompt is missing its planned offset.',
               sessionId: session.id,
             ),
           );
-        } else if (offset != null && !shownOffsets.add(offset)) {
+        } else if (offset != null && !resolvedOffsets.add(offset)) {
           issues.add(
             MeasurementIssue(
               code: 'duplicate_prompt_exposure_offset',
               severity: MeasurementIssueSeverity.high,
               message:
-                  'More than one prompt was shown for the same plan offset.',
+                  'More than one prompt was shown or missed for the same plan '
+                  'offset.',
               sessionId: session.id,
             ),
           );
@@ -311,7 +330,7 @@ MeasurementQualityReport validateMeasurementData(
 
     if (session.completed) {
       final missingOffsets = plannedOffsets
-          .where((offset) => !shownOffsets.contains(offset))
+          .where((offset) => !resolvedOffsets.contains(offset))
           .length;
       if (missingOffsets > 0) {
         issues.add(
@@ -319,7 +338,8 @@ MeasurementQualityReport validateMeasurementData(
             code: 'completed_session_missing_planned_exposure',
             severity: MeasurementIssueSeverity.medium,
             message:
-                'Completed session did not show every stored planned prompt.',
+                'Completed session did not show or mark missed every stored '
+                'planned prompt.',
             sessionId: session.id,
           ),
         );
@@ -327,6 +347,50 @@ MeasurementQualityReport validateMeasurementData(
     }
 
     for (final entry in eventsByPrompt.entries) {
+      final missed = entry.value
+          .where((event) => event.type == PromptResponseType.missed)
+          .length;
+      if (missed > 0) {
+        // A missed check was never displayed in the app, so it has no in-app
+        // exposure, response, or timeout. The only thing that may follow it is
+        // one answer from the OS notification's action button.
+        final rest = entry.value.skip(1).toList(growable: false);
+        final validLateAnswer =
+            rest.length == 1 &&
+            rest.single.channel == PromptChannel.notification &&
+            (rest.single.type == PromptResponseType.onTask ||
+                rest.single.type == PromptResponseType.offTask);
+        if (missed != 1 ||
+            entry.value.first.type != PromptResponseType.missed ||
+            (rest.isNotEmpty && !validLateAnswer)) {
+          issues.add(
+            MeasurementIssue(
+              code: 'invalid_missed_prompt_record',
+              severity: MeasurementIssueSeverity.high,
+              message:
+                  'A missed prompt may be followed only by one notification '
+                  'answer, never by in-app exposure or responses.',
+              sessionId: session.id,
+            ),
+          );
+        } else if (validLateAnswer) {
+          final answer = rest.single;
+          final expectedLatency =
+              answer.elapsedSeconds - entry.value.first.elapsedSeconds;
+          if (answer.responseLatencySeconds != null &&
+              answer.responseLatencySeconds != expectedLatency) {
+            issues.add(
+              MeasurementIssue(
+                code: 'inconsistent_response_latency',
+                severity: MeasurementIssueSeverity.medium,
+                message: 'Stored response latency disagrees with elapsed time.',
+                sessionId: session.id,
+              ),
+            );
+          }
+        }
+        continue;
+      }
       final shown = entry.value
           .where((event) => event.type == PromptResponseType.shown)
           .toList(growable: false);

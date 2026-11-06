@@ -1,9 +1,76 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'models.dart';
+
+/// Goal-check notification category with answer buttons.
+///
+/// Both actions open the app (`foreground`), so the answer is handled by the
+/// running engine in the main isolate and never needs a background isolate to
+/// hand data across. Dismissing the notification is the way to not answer.
+final goalCheckCategory = DarwinNotificationCategory(
+  goalCheckNotificationCategory,
+  actions: [
+    DarwinNotificationAction.plain(
+      goalCheckOnTaskActionId,
+      '仍在目标',
+      options: const {DarwinNotificationActionOption.foreground},
+    ),
+    DarwinNotificationAction.plain(
+      goalCheckOffTaskActionId,
+      '刚刚走神',
+      options: const {DarwinNotificationActionOption.foreground},
+    ),
+  ],
+);
+
+/// One scheduled goal-check notification.
+class PlannedGoalCheckNotification {
+  const PlannedGoalCheckNotification({
+    required this.id,
+    required this.promptId,
+    required this.secondsFromNow,
+  });
+
+  final int id;
+
+  /// Payload; equals the engine's prompt ID for the same check.
+  final String promptId;
+  final int secondsFromNow;
+}
+
+/// Which goal checks still need a notification, keeping each check's index in
+/// the full plan so its payload matches the engine's prompt ID even when the
+/// session resumes part-way through.
+List<PlannedGoalCheckNotification> plannedGoalCheckNotifications({
+  required String sessionId,
+  required List<PromptCue> cues,
+  required int elapsedSeconds,
+  int limit = 48,
+}) {
+  final planned = <PlannedGoalCheckNotification>[];
+  for (var index = 0; index < cues.length && planned.length < limit; index++) {
+    final cue = cues[index];
+    if (cue.offsetSeconds <= elapsedSeconds) continue;
+    planned.add(
+      PlannedGoalCheckNotification(
+        id: stableNotificationId(sessionId, cue.offsetSeconds),
+        promptId: goalCheckPromptId(sessionId, index),
+        secondsFromNow: cue.offsetSeconds - elapsedSeconds,
+      ),
+    );
+  }
+  return planned;
+}
+
+int stableNotificationId(String sessionId, int offset) {
+  return (sessionId.hashCode ^ offset.hashCode) & 0x7fffffff;
+}
 
 class NotificationService {
   NotificationService()
@@ -12,7 +79,22 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin;
   final List<int> _scheduledIds;
+  final _answers = StreamController<GoalCheckAnswer>.broadcast();
   var _initialized = false;
+
+  /// Answers chosen from goal-check notification buttons.
+  Stream<GoalCheckAnswer> get goalCheckAnswers => _answers.stream;
+
+  /// Routes a notification response to [goalCheckAnswers]. Plain taps and
+  /// other notifications are ignored.
+  @visibleForTesting
+  void handleResponse(NotificationResponse response) {
+    final answer = parseGoalCheckAnswer(
+      actionId: response.actionId,
+      payload: response.payload,
+    );
+    if (answer != null) _answers.add(answer);
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -23,13 +105,17 @@ class NotificationService {
     } catch (_) {
       tz.setLocalLocation(tz.getLocation('UTC'));
     }
-    const darwin = DarwinInitializationSettings(
+    final darwin = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
       requestSoundPermission: false,
+      notificationCategories: [goalCheckCategory],
     );
-    const settings = InitializationSettings(iOS: darwin);
-    await _plugin.initialize(settings: settings);
+    final settings = InitializationSettings(iOS: darwin);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: handleResponse,
+    );
     _initialized = true;
   }
 
@@ -61,21 +147,20 @@ class NotificationService {
     await cancelScheduled();
 
     final now = DateTime.now();
-    final futureCues = cues
-        .where((cue) => cue.offsetSeconds > elapsedSeconds)
-        .take(48);
-    for (final cue in futureCues) {
-      final secondsFromNow = cue.offsetSeconds - elapsedSeconds;
-      final id = _stableNotificationId(sessionId, cue.offsetSeconds);
-      _scheduledIds.add(id);
+    for (final check in plannedGoalCheckNotifications(
+      sessionId: sessionId,
+      cues: cues,
+      elapsedSeconds: elapsedSeconds,
+    )) {
+      _scheduledIds.add(check.id);
       await _plugin.zonedSchedule(
-        id: id,
+        id: check.id,
         title: '目标检查',
         body: settings.sessionGoal.isEmpty
             ? '还在做刚才决定的事吗？可忽略；未响应不会被视为失败。'
             : '当前目标：${settings.sessionGoal}',
         scheduledDate: tz.TZDateTime.from(
-          now.add(Duration(seconds: secondsFromNow)),
+          now.add(Duration(seconds: check.secondsFromNow)),
           tz.local,
         ),
         notificationDetails: const NotificationDetails(
@@ -90,15 +175,17 @@ class NotificationService {
             presentAlert: true,
             presentSound: false,
             threadIdentifier: 'random-cue-focus',
+            categoryIdentifier: goalCheckNotificationCategory,
           ),
         ),
+        payload: check.promptId,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     }
 
     final remainingFocus = settings.focusDurationSeconds - elapsedSeconds;
     if (remainingFocus > 0) {
-      final endId = _stableNotificationId(sessionId, 999999);
+      final endId = stableNotificationId(sessionId, 999999);
       _scheduledIds.add(endId);
       await _plugin.zonedSchedule(
         id: endId,
@@ -127,7 +214,15 @@ class NotificationService {
     }
   }
 
-  int _stableNotificationId(String sessionId, int offset) {
-    return (sessionId.hashCode ^ offset.hashCode) & 0x7fffffff;
+  /// Removes a goal-check notification once its check has been answered in
+  /// the app, so its now-stale buttons cannot be pressed later.
+  Future<void> clearGoalCheck({
+    required String sessionId,
+    required int offsetSeconds,
+  }) async {
+    final id = stableNotificationId(sessionId, offsetSeconds);
+    if (!_scheduledIds.remove(id)) return;
+    await initialize();
+    await _plugin.cancel(id: id);
   }
 }

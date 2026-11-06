@@ -8,6 +8,11 @@ import 'models.dart';
 import 'notification_service.dart';
 import 'stores.dart';
 
+/// A wall-clock gap between ticks longer than this means the timer was
+/// suspended (app in the background, device asleep). Seconds replayed to catch
+/// up after such a gap were never on screen.
+const maxLiveTickGapSeconds = 3;
+
 class FocusEngine extends ChangeNotifier {
   FocusEngine({
     required FocusSettings settings,
@@ -17,7 +22,11 @@ class FocusEngine extends ChangeNotifier {
   }) : _settings = settings,
        _settingsStore = settingsStore,
        _sessionStore = sessionStore,
-       _notificationService = notificationService;
+       _notificationService = notificationService {
+    _answerSubscription = notificationService.goalCheckAnswers.listen(
+      recordNotificationAnswer,
+    );
+  }
 
   final SettingsStore _settingsStore;
   final SessionStore _sessionStore;
@@ -37,11 +46,18 @@ class FocusEngine extends ChangeNotifier {
   int _nextPromptIndex = 0;
   Future<void>? _sessionSaveFuture;
   String? _activePromptId;
+  int? _activePromptPlannedOffset;
+  StreamSubscription<GoalCheckAnswer>? _answerSubscription;
   int? _activePromptStartedElapsed;
   MeasurementContext _measurementContext = const MeasurementContext();
   SessionOutcomeReport? _outcomeReport;
   List<PromptCue> _promptPlan = const [];
   final List<PromptEvent> _events = [];
+  bool _appInForeground = true;
+
+  /// Wall clock for the ticker; replaceable so tests can simulate suspension.
+  @visibleForTesting
+  DateTime Function() clock = DateTime.now;
 
   FocusSettings get settings => _settings;
   SessionPhase get phase => _phase;
@@ -53,6 +69,24 @@ class FocusEngine extends ChangeNotifier {
   SessionOutcomeReport? get outcomeReport => _outcomeReport;
   StudySessionAssignment? get activeStudyAssignment =>
       _measurementContext.studyAssignment;
+
+  bool get appInForeground => _appInForeground;
+
+  @visibleForTesting
+  String? get activeSessionId => _activeSessionId;
+
+  /// Tells the engine whether the in-app goal-check card can be seen.
+  ///
+  /// The app shell calls this from its lifecycle observer. Time already spent
+  /// in the outgoing state is settled first, so seconds that passed while the
+  /// app was in the background are replayed as unseen: checks that came due
+  /// then are recorded as `missed`, never as `shown` + `ended`.
+  void setAppInForeground(bool inForeground) {
+    if (_appInForeground == inForeground) return;
+    _tick();
+    _appInForeground = inForeground;
+    notifyListeners();
+  }
 
   bool get isActive =>
       _phase == SessionPhase.focusing ||
@@ -188,7 +222,7 @@ class FocusEngine extends ChangeNotifier {
       studyAssignment: studyAssignment,
     );
     _phase = SessionPhase.focusing;
-    _lastTick = DateTime.now();
+    _lastTick = clock();
 
     try {
       await _notificationService.scheduleFocusFallback(
@@ -219,7 +253,7 @@ class FocusEngine extends ChangeNotifier {
     if (_phase != SessionPhase.paused) return;
     _phase = _phaseBeforePause ?? SessionPhase.focusing;
     _phaseBeforePause = null;
-    _lastTick = DateTime.now();
+    _lastTick = clock();
     _startTicker();
     final sessionId = _activeSessionId;
     if (sessionId != null) {
@@ -283,8 +317,46 @@ class FocusEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _resolvePrompt(PromptResponseType response) {
-    if (_phase != SessionPhase.microBreak) return;
+  /// Applies an answer chosen from a goal-check notification button.
+  ///
+  /// Time is settled first, so a check that came due while the app was in the
+  /// background is already recorded as `missed` before the answer arrives.
+  /// The check on screen is resolved directly; a check that was missed or
+  /// timed out gets a late answer; anything else (unknown, already answered,
+  /// session over) is ignored. Returns whether the answer was recorded.
+  bool recordNotificationAnswer(GoalCheckAnswer answer) {
+    if (_activeSessionId == null ||
+        _phase == SessionPhase.idle ||
+        _phase == SessionPhase.completed) {
+      return false;
+    }
+    _tick();
+    if (_activePromptId == answer.promptId &&
+        (_phase == SessionPhase.microBreak ||
+            _phaseBeforePause == SessionPhase.microBreak)) {
+      _resolvePrompt(answer.response, channel: PromptChannel.notification);
+      return true;
+    }
+    final event = lateNotificationAnswerEvent(
+      events: _events,
+      answer: answer,
+      elapsedSeconds: _focusElapsed,
+      at: DateTime.now(),
+    );
+    if (event == null) return false;
+    _events.add(event);
+    notifyListeners();
+    return true;
+  }
+
+  void _resolvePrompt(
+    PromptResponseType response, {
+    PromptChannel channel = PromptChannel.inApp,
+  }) {
+    final paused =
+        _phase == SessionPhase.paused &&
+        _phaseBeforePause == SessionPhase.microBreak;
+    if (_phase != SessionPhase.microBreak && !paused) return;
     _events.add(
       PromptEvent(
         elapsedSeconds: _focusElapsed,
@@ -294,12 +366,31 @@ class FocusEngine extends ChangeNotifier {
         responseLatencySeconds: _activePromptStartedElapsed == null
             ? null
             : _focusElapsed - _activePromptStartedElapsed!,
+        channel: channel,
       ),
     );
+    final sessionId = _activeSessionId;
+    final plannedOffset = _activePromptPlannedOffset;
+    if (channel == PromptChannel.inApp &&
+        sessionId != null &&
+        plannedOffset != null) {
+      unawaited(
+        _notificationService
+            .clearGoalCheck(sessionId: sessionId, offsetSeconds: plannedOffset)
+            .catchError((Object error) {
+              debugPrint('Clearing goal-check notification failed: $error');
+            }),
+      );
+    }
     _activePromptId = null;
+    _activePromptPlannedOffset = null;
     _activePromptStartedElapsed = null;
     _microBreakRemaining = 0;
-    _phase = SessionPhase.focusing;
+    if (paused) {
+      _phaseBeforePause = SessionPhase.focusing;
+    } else {
+      _phase = SessionPhase.focusing;
+    }
     notifyListeners();
   }
 
@@ -308,23 +399,25 @@ class FocusEngine extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
-  void _tick() {
-    final now = DateTime.now();
+  void _tick([DateTime? at]) {
+    final now = at ?? clock();
     final previous = _lastTick ?? now;
     final deltaSeconds = now.difference(previous).inSeconds;
     if (deltaSeconds <= 0) return;
     _lastTick = now;
+    final promptsVisible =
+        _appInForeground && deltaSeconds <= maxLiveTickGapSeconds;
     for (var i = 0; i < deltaSeconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: promptsVisible);
     }
     notifyListeners();
   }
 
-  void _advanceOneSecond() {
+  void _advanceOneSecond({required bool promptsVisible}) {
     switch (_phase) {
       case SessionPhase.focusing:
         _focusElapsed += 1;
-        _maybeStartMicroBreak();
+        _maybeStartMicroBreak(visible: promptsVisible);
         if (_focusElapsed >= _settings.focusDurationSeconds) {
           _completeFocus();
         }
@@ -349,6 +442,7 @@ class FocusEngine extends ChangeNotifier {
             ),
           );
           _activePromptId = null;
+          _activePromptPlannedOffset = null;
           _activePromptStartedElapsed = null;
           _phase = SessionPhase.focusing;
         }
@@ -369,27 +463,52 @@ class FocusEngine extends ChangeNotifier {
     }
   }
 
+  /// Advances live (foreground) seconds one by one, as the ticker would.
   @visibleForTesting
   void advanceForTesting(int seconds) {
     assert(seconds >= 0);
     _ticker?.cancel();
     for (var i = 0; i < seconds; i += 1) {
-      _advanceOneSecond();
+      _advanceOneSecond(promptsVisible: _appInForeground);
     }
     _ticker?.cancel();
     notifyListeners();
   }
 
-  void _maybeStartMicroBreak() {
+  /// Runs one ticker callback as if the wall clock now read [now].
+  @visibleForTesting
+  void tickAtForTesting(DateTime now) {
+    _ticker?.cancel();
+    _tick(now);
+    _ticker?.cancel();
+  }
+
+  void _maybeStartMicroBreak({required bool visible}) {
     if (_nextPromptIndex >= _promptPlan.length) return;
     final nextCue = _promptPlan[_nextPromptIndex];
     if (_focusElapsed < nextCue.offsetSeconds) return;
 
-    final promptId = '${_activeSessionId ?? 'session'}:$_nextPromptIndex';
+    final promptId = goalCheckPromptId(
+      _activeSessionId ?? 'session',
+      _nextPromptIndex,
+    );
     _nextPromptIndex += 1;
+    if (!visible) {
+      _events.add(
+        PromptEvent(
+          elapsedSeconds: _focusElapsed,
+          occurredAt: DateTime.now(),
+          type: PromptResponseType.missed,
+          promptId: promptId,
+          plannedOffsetSeconds: nextCue.offsetSeconds,
+        ),
+      );
+      return;
+    }
     _microBreakRemaining = _settings.microBreakSeconds;
     _phase = SessionPhase.microBreak;
     _activePromptId = promptId;
+    _activePromptPlannedOffset = nextCue.offsetSeconds;
     _activePromptStartedElapsed = _focusElapsed;
     _events.add(
       PromptEvent(
@@ -409,7 +528,7 @@ class FocusEngine extends ChangeNotifier {
     _restElapsed = 0;
     unawaited(_notificationService.cancelScheduled());
     unawaited(_playCue());
-    _lastTick = DateTime.now();
+    _lastTick = clock();
     _startTicker();
   }
 
@@ -487,6 +606,7 @@ class FocusEngine extends ChangeNotifier {
     _sessionSaveFuture = null;
     _outcomeReport = null;
     _activePromptId = null;
+    _activePromptPlannedOffset = null;
     _activePromptStartedElapsed = null;
     _measurementContext = const MeasurementContext();
     _promptPlan = const [];
@@ -496,6 +616,7 @@ class FocusEngine extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    unawaited(_answerSubscription?.cancel());
     super.dispose();
   }
 }

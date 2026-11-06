@@ -20,6 +20,8 @@ flowchart LR
   P --> E["Platform focus engine/controller"]
   E --> U["Skippable in-app goal check"]
   E --> N["Optional platform notification"]
+  N --> B["Answer button: still on goal / just distracted"]
+  B --> R
   U --> R["Typed local response event"]
   R --> H
   R --> M["Local outcome summary"]
@@ -27,13 +29,16 @@ flowchart LR
 
 ## Data compatibility
 
-Schema version `5` retains schema-4 algorithm/settings snapshots, planned prompt offsets, prompt correlation IDs, response latency, and optional post-session outcomes while adding explicit study enrollment and per-session assignment. It preserves earlier fields, legacy platform notification keys, and typed migration of old `microbreak_start`/`microbreak_end` strings. Fresh defaults change, but stored user choices are normalized and retained.
+Schema version `6` retains schema-4 algorithm/settings snapshots, planned prompt offsets, prompt correlation IDs, response latency, optional post-session outcomes, and schema-5 explicit study enrollment and per-session assignment, while adding per-session goal-check enabled, interval, and response-window snapshots. The `missed` prompt event type is additive and needs no migration. It preserves earlier fields, legacy platform notification keys, and typed migration of old `microbreak_start`/`microbreak_end` strings. Fresh defaults change, but stored user choices are normalized and retained.
 
 ## Failure policy
 
 - Invalid settings fall back to safe normalized defaults.
 - Individually corrupt session records are skipped rather than blocking all history.
 - Optional notification/tray adapter failures must not stop the timer.
+- Notification answer buttons resolve the same check as the in-app card (`promptId` is the notification payload). Answers are applied by the running engine in the main isolate; both iOS actions open the app, so no background isolate or cross-isolate storage is involved. An answer with no running session, an unknown check, or a check that already has an answer is ignored.
+- On Windows, goal-check toasts use `flutter_local_notifications_windows` (AUMID `RandomCueFocus.Desktop` with a fixed activation GUID). If that plugin cannot initialize or show a toast, the adapter falls back to the legacy tray balloon, which has no buttons. Without MSIX packaging, a delivered toast cannot be withdrawn after an in-app answer; a later button press is ignored because the check already has an answer.
 - Windows JSON writes use a same-directory temporary file, flush, backup/replace, restoration on failure, and cleanup. Reads fall back to a valid backup and skip individually corrupt session entries.
 - Planner output is bounded, deterministic under a seed, and limited to eight checks per session.
+- A check is recorded as `shown` only when its card can be seen. Seconds replayed after the iOS app was backgrounded, or after any tick gap above 3 seconds (sleep, suspension), mark due checks `missed` and trigger no sound or notification.
 - An active study assignment is persisted before planning/exposure. Persistence failure aborts session start; control-arm exposure, post-start assignment, and duplicate assignments are critical measurement errors.

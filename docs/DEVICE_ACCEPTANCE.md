@@ -9,6 +9,8 @@ Record app commit SHA, app version, OS build, device model, locale, timezone, po
 - [ ] Fresh install: notification is not requested on launch and defaults remain off.
 - [ ] User enables lock-screen checks: permission request occurs in context; denial leaves the timer usable.
 - [ ] Allowed permission: one expected check appears within timing tolerance; title/body match the current goal; no sound plays.
+- [ ] The goal-check notification shows “仍在目标” and “刚刚走神” on long-press/expand, on the lock screen and as a banner. Each opens the app and records the answer on that check once (channel `notification`), whether the app was suspended or in the foreground. A plain tap opens the app without answering. Answering in the app removes the delivered notification.
+- [ ] After a force-quit, pressing a button on an old notification starts the app without crashing and records nothing (there is no running session).
 - [ ] Foreground, background, locked screen, app force-quit, and device restart behavior documented.
 - [ ] Pause, stop, or completion cancels stale scheduled checks; starting a new session does not duplicate old checks.
 - [ ] Focus mode, Scheduled Summary, Low Power Mode, and notification settings interactions documented without claiming guaranteed delivery.
@@ -23,6 +25,9 @@ Record app commit SHA, app version, OS build, device model, locale, timezone, po
 
 - [ ] Fresh install: desktop notifications and foreground sound default off; tray defaults on.
 - [ ] Opt-in toast appears once with the current goal; clicking/dismissing behavior is documented.
+- [ ] With desktop notifications on, the goal-check toast is silent and shows “仍在目标” and “刚刚走神”. Pressing one while the app runs (window shown, minimized, or tray-only) records that answer once on the right check (channel `notification`). Clicking the toast body does not answer. Behavior when the app has exited is documented.
+- [ ] If the toast plugin cannot initialize (for example, a locked-down machine), the tray balloon fallback still appears, and the timer is unaffected.
+- [ ] After waking from sleep, a toast for a check that came due during sleep can still be answered, and is recorded after a `missed` event.
 - [ ] Foreground, minimized, tray-only, locked, sleep/wake, restart, and multiple-monitor behavior checked.
 - [ ] Focus Assist/Do Not Disturb suppression is respected and does not block timer completion.
 - [ ] Pause, stop, completion, and rapid session restart do not create duplicate or stale prompts.

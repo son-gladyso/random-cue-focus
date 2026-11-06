@@ -10,7 +10,8 @@ toasts, and a system tray fallback.
 - Fresh defaults of 50/10 minutes, 12–18-minute checks, and a 20-second response window.
 - Whole-session check control and a local burden heuristic that never increases frequency after an off-task self-report.
 - Recoverable local settings/session persistence with partial-corruption handling.
-- Windows notification adapter and tray controller.
+- Windows notification adapter (silent toasts with “仍在目标” / “刚刚走神” buttons via
+  `flutter_local_notifications_windows`, falling back to the tray balloon) and tray controller.
 - Behavioral statistics for timer duration/completion, checks shown, and recent sessions.
 
 ## Develop on Windows

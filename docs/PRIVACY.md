@@ -22,4 +22,4 @@ Leaving the optional local crossover immediately prevents future assignment but 
 
 ## Notification privacy
 
-Lock-screen/desktop notification text can reveal the session goal. Notifications therefore default off. Users should avoid placing confidential information in a goal if they enable external notifications.
+Lock-screen/desktop notification text can reveal the session goal. Notifications therefore default off. Users should avoid placing confidential information in a goal if they enable external notifications. A notification's hidden payload holds only the random local session ID and the check's index; answering from a notification stores the same local fields as answering in the app plus `channel: notification`, and nothing is sent anywhere.
