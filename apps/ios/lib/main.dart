@@ -13,7 +13,12 @@ Future<void> main() async {
   final settingsStore = SettingsStore();
   final sessionStore = SessionStore();
   final notificationService = NotificationService();
-  await notificationService.initialize();
+  // An active timer is not restored on cold launch.
+  try {
+    await notificationService.cancelScheduled();
+  } catch (error) {
+    debugPrint('Startup notification cleanup failed: $error');
+  }
   final settings = await settingsStore.load();
 
   runApp(
